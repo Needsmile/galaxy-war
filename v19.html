@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GALAXY WAR: v20</title>
+    <style>
+        * { touch-action: none; -webkit-user-select: none; box-sizing: border-box; }
+        body { margin: 0; background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; font-family: sans-serif; }
+        #game-container { position: relative; width: 400px; height: 700px; background: #050508; overflow: hidden; border: 2px solid #1a1a2e; }
+        canvas { width: 100%; height: 100%; display: block; }
+        .hud-item { position: absolute; z-index: 10; color: white; pointer-events: none; }
+        #top-left { top: 15px; left: 15px; }
+        #top-center { top: 15px; left: 50%; transform: translateX(-50%); font-size: 20px; font-weight: bold; color: #f1c40f; }
+        #top-right { top: 15px; right: 15px; pointer-events: auto; }
+        .screen-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; color: white; padding: 20px; text-align: center; }
+        .btn { padding: 12px 25px; font-size: 16px; background: rgba(0,210,255,0.1); color: #00d2ff; border: 1px solid #00d2ff; border-radius: 8px; cursor: pointer; margin: 8px; width: 240px; }
+        #msg-layer { position: absolute; top: 30%; width: 100%; text-align: center; color: #ff4757; font-size: 32px; font-weight: bold; display: none; text-shadow: 0 0 15px #ff4757; z-index: 50; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="400" height="700"></canvas>
+    
+    <div id="top-left" class="hud-item">
+        <div id="score-text" style="font-size: 14px;">KILLS: 0</div>
+        <div id="life-ui" style="font-size: 18px; margin-top: 5px;">❤️❤️❤️❤️❤️</div>
+    </div>
+    <div id="top-center" class="hud-item">05:00</div>
+    <div id="top-right" class="hud-item">
+        <div id="pause-btn" onclick="togglePause()" style="border: 1px solid #fff; padding: 2px 10px; border-radius: 4px; cursor: pointer; margin-bottom: 5px; text-align: center;">PAUSE</div>
+        <div id="soldier-ui" style="background: rgba(0,210,255,0.2); border: 1px solid #00d2ff; padding: 2px 8px; border-radius: 4px; font-size: 12px; color: #00d2ff;">S: 10</div>
+    </div>
+
+    <div id="msg-layer">WARNING: BOSS</div>
+
+    <div id="start-screen" class="screen-overlay">
+        <h1 style="color:#00d2ff;">GALAXY WAR v20</h1>
+        <p id="save-info" style="font-size: 11px; color: #aaa; margin-bottom: 20px;"></p>
+        <button class="btn" onclick="startGame()">MISSION START</button>
+    </div>
+
+    <div id="unit-select-screen" class="screen-overlay" style="display:none;">
+        <h2 style="color:#f1c40f;">BOSS DESTROYED!</h2>
+        <button class="btn" onclick="applyUnit('laser')">LASER (관통 레이저)</button>
+        <button class="btn" onclick="applyUnit('guard')">GUARD (자폭 보호)</button>
+        <button class="btn" onclick="applyUnit('missile')">MISSILE (유도탄)</button>
+    </div>
+
+    <div id="pause-screen" class="screen-overlay" style="display:none;">
+        <h1>PAUSED</h1>
+        <button class="btn" onclick="togglePause()">RESUME</button>
+        <button class="btn" onclick="confirmQuit()">QUIT</button>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
+    let state = 'STOP', isPaused = false, score = 0, soldiers = 10, life = 5, level = 1, frame = 0;
+    let playerX = 200, objects = [], bullets = [], stars = [], activeUnit = null, startTime = 0, isBossPhase = false;
+    
+    for(let i=0; i<60; i++) stars.push({x: Math.random()*400, y: Math.random()*700, s: Math.random()*1.5 + 0.5});
+    const bgm = new Audio('https://cdn.pixabay.com/audio/2022/10/14/audio_9939f770f7.mp3');
+    bgm.loop = true; bgm.volume = 0.2;
+
+    function startGame() { state = 'PLAY'; document.querySelectorAll('.screen-overlay').forEach(el => el.style.display = 'none'); startTime = Date.now(); bgm.play().catch(()=>{}); requestAnimationFrame(loop); }
+    function togglePause() { if(state !== 'PLAY') return; isPaused = !isPaused; document.getElementById('pause-screen').style.display = isPaused ? 'flex' : 'none'; if(!isPaused) requestAnimationFrame(loop); }
+    function confirmQuit() { if(confirm("시작화면으로 나갈까요?")) location.reload(); }
+    function applyUnit(type) { activeUnit = type; document.getElementById('unit-select-screen').style.display = 'none'; isPaused = false; requestAnimationFrame(loop); }
+
+    function loop() {
+        if(state !== 'PLAY' || isPaused) return;
+        frame++;
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        document.getElementById('top-center').innerText = `${Math.floor(elapsed/60).toString().padStart(2,'0')}:${(elapsed%60).toString().padStart(2,'0')}`;
+
+        ctx.fillStyle = '#050508'; ctx.fillRect(0,0,400,700);
+        ctx.fillStyle = '#fff'; stars.forEach(s => { s.y += s.s; if(s.y>700) s.y=0; ctx.fillRect(s.x, s.y, s.s, s.s); });
+
+        // --- [수정] 보스전 시 일반 적 생성 중단 로직 ---
+        if(!isBossPhase && frame % Math.max(25, 140 - (level*8)) === 0) {
+            let type = (elapsed < 30 || Math.random() < 0.4) ? 'gate' : 'enemy';
+            if(Math.random() < 0.05) type = 'heart';
+            objects.push({
+                x: Math.random()*340+30, y: -50, type: type,
+                hp: type === 'enemy' ? Math.max(1, Math.floor(soldiers*0.3 + level*10)) : 0,
+                val: type === 'gate' ? (Math.random() < 0.3 ? -5 : 3) : 0, // 초기값 하향
+                size: 25, dead: false
+            });
+        }
+
+        // 보스 출현 알림 및 생성
+        if(elapsed > 0 && elapsed % 60 === 0 && !isBossPhase) {
+            isBossPhase = true;
+            document.getElementById('msg-layer').style.display = 'block';
+            setTimeout(() => {
+                document.getElementById('msg-layer').style.display = 'none';
+                objects.push({ x: 200, y: -100, type: 'boss', hp: Math.floor((soldiers + level*100)*2.5), size: 60, dead: false });
+            }, 2000);
+        }
+
+        // --- [수정] 탄환 방사 각도 좁게 조정 (집중 화력) ---
+        if(frame % 7 === 0) {
+            let count = Math.min(15, Math.floor(soldiers / 70) + 1);
+            for(let i=0; i<count; i++) {
+                // vx를 기존 0.35에서 0.15로 낮추어 탄환을 모음
+                bullets.push({x: playerX + (i-(count-1)/2)*8, y: 610, vx: (i-(count-1)/2)*0.15, type: 'normal'});
+            }
+            if(activeUnit === 'laser' && frame % 14 === 0) bullets.push({x: playerX, y: 610, vx: 0, type: 'laser'});
+            if(activeUnit === 'missile' && frame % 21 === 0) bullets.push({x: playerX, y: 610, vx: 0, type: 'missile'});
+        }
+
+        for(let i=objects.length-1; i>=0; i--) {
+            let o = objects[i];
+            o.y += (o.type === 'boss' ? 0.4 : 1.3 + level*0.2);
+
+            ctx.shadowBlur = 10;
+            if(o.type === 'gate') {
+                ctx.strokeStyle = o.val >= 0 ? '#00d2ff' : '#ff4757';
+                ctx.shadowColor = ctx.strokeStyle;
+                ctx.strokeRect(o.x-35, o.y-15, 70, 30);
+                ctx.fillStyle='#fff'; ctx.fillText((o.val > 0 ? "+" : "") + o.val, o.x, o.y+5);
+            } else if(o.type === 'enemy' || o.type === 'boss') {
+                ctx.strokeStyle = o.type === 'boss' ? '#f1c40f' : '#ff4757';
+                ctx.shadowColor = ctx.strokeStyle;
+                ctx.beginPath(); ctx.arc(o.x, o.y, o.size, 0, 7); ctx.stroke();
+                ctx.fillStyle='#fff'; ctx.fillText(o.hp, o.x, o.y+5);
+            } else if(o.type === 'heart') {
+                ctx.fillStyle='#ff4757'; ctx.fillText('♥', o.x, o.y+5);
+            }
+            ctx.shadowBlur = 0;
+
+            if(o.y > 720) {
+                if((o.type==='enemy' || o.type==='boss') && !o.dead) life -= 0.5;
+                if(o.type === 'boss') isBossPhase = false; // 보스 놓쳐도 페이즈 종료
+                objects.splice(i, 1); continue;
+            }
+            if(Math.hypot(o.x-playerX, o.y-620) < o.size + 15) {
+                if(o.type==='gate') soldiers += o.val;
+                else if(o.type==='heart') life = Math.min(5, life+1);
+                else { life -= 1; if(o.type==='boss') isBossPhase = false; }
+                o.dead = true;
+            }
+            if(o.dead) { objects.splice(i,1); continue; }
+        }
+
+        for(let i=bullets.length-1; i>=0; i--) {
+            let b = bullets[i];
+            b.y -= 15; b.x += b.vx;
+            if(b.type === 'missile') { let t = objects.find(o => o.type==='enemy' || o.type==='boss'); if(t) b.x += (t.x - b.x) * 0.15; }
+
+            ctx.fillStyle = b.type==='laser' ? '#ff00ff' : (b.type==='missile'?'#f1c40f':'#00d2ff');
+            ctx.fillRect(b.x-2, b.y, 3, b.type==='laser'?50:12);
+
+            objects.forEach(o => {
+                if(Math.hypot(b.x-o.x, b.y-o.y) < o.size + 10) {
+                    if(o.type === 'gate') { o.val += 1; bullets.splice(i, 1); }
+                    else if(o.type === 'enemy' || o.type === 'boss') {
+                        o.hp -= (b.type==='laser'?2:1);
+                        if(b.type !== 'laser') bullets.splice(i, 1);
+                        if(o.hp <= 0 && !o.dead) {
+                            o.dead = true; score += (o.type==='boss'?50:1);
+                            if(o.type==='boss') { 
+                                isBossPhase = false; // 보스 격파 시 일반 적 다시 등장 허용
+                                isPaused = true; 
+                                document.getElementById('unit-select-screen').style.display = 'flex'; 
+                            }
+                        }
+                    }
+                }
+            });
+            if(b.y < -50) bullets.splice(i, 1);
+        }
+
+        ctx.strokeStyle = '#00d2ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(playerX, 620, 20, 0, 7); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.textAlign='center'; ctx.fillText(Math.floor(soldiers), playerX, 625);
+        let hDisplay = ""; for(let i=0; i<Math.floor(life); i++) hDisplay += "❤️"; if(life % 1 !== 0) hDisplay += "💔";
+        document.getElementById('life-ui').innerText = hDisplay;
+        document.getElementById('score-text').innerText = "KILLS: " + score;
+        document.getElementById('soldier-ui').innerText = "S: " + Math.floor(soldiers);
+
+        if(life <= 0) endGame(); else requestAnimationFrame(loop);
+    }
+
+    function endGame() { state = 'STOP'; bgm.pause(); document.body.innerHTML += '<div class="screen-overlay"><h1>FAILED</h1><button class="btn" onclick="location.reload()">RETRY</button></div>'; }
+    const move = (e) => { if(state !== 'PLAY' || isPaused) return; let rect = canvas.getBoundingClientRect(); let x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left; playerX = Math.max(25, Math.min(375, x * (400 / rect.width))); };
+    canvas.addEventListener('touchmove', e => { move(e); e.preventDefault(); }, {passive:false});
+    canvas.addEventListener('mousemove', move);
+</script>
+</body>
+</html>
