@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GALAXY WAR: FINAL</title>
+    <style>
+        * { touch-action: none; -webkit-user-select: none; box-sizing: border-box; }
+        body { margin: 0; background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; font-family: sans-serif; }
+        #game-container { position: relative; width: 400px; height: 700px; background: #050508; overflow: hidden; border: 1px solid #333; }
+        canvas { width: 100%; height: 100%; display: block; }
+        #hud { position: absolute; top: 0; width: 100%; pointer-events: none; z-index: 10; color: white; padding: 15px; }
+        .info-left { display: flex; flex-direction: column; gap: 4px; }
+        #life-ui { color: #ff4757; letter-spacing: 2px; font-size: 14px; text-shadow: 0 0 5px #ff4757; }
+        #time-display { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); font-size: 18px; font-weight: bold; color: #f1c40f; text-shadow: 0 0 8px #f1c40f; }
+        #control-area { position: absolute; top: 15px; right: 15px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+        #pause-btn { width: 35px; height: 35px; background: rgba(255,255,255,0.1); border: 1px solid #fff; color: white; border-radius: 5px; cursor: pointer; pointer-events: auto; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        #soldier-ui { font-size: 12px; font-weight: bold; background: rgba(0,0,0,0.6); padding: 3px 8px; border: 1px solid #00d2ff; border-radius: 4px; }
+        .vol-control { pointer-events: auto; display: flex; align-items: center; gap: 5px; margin-top: 5px; }
+        #vol-slider { width: 60px; height: 4px; cursor: pointer; accent-color: #f1c40f; }
+        .screen-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; color: white; padding: 20px; text-align: center; }
+        h1 { color: #00d2ff; margin-bottom: 5px; font-size: 28px; letter-spacing: 2px; }
+        .time-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; width: 220px; }
+        .opt-btn { padding: 10px; font-size: 12px; background: #1a1a1a; border: 1px solid #444; color: #fff; cursor: pointer; border-radius: 4px; }
+        .opt-btn.active { border-color: #f1c40f; color: #f1c40f; background: #332b00; }
+        .btn { padding: 12px 25px; font-size: 16px; background: transparent; color: white; border: 1px solid #fff; border-radius: 4px; cursor: pointer; margin: 5px; width: 220px; transition: 0.3s; }
+        #msg-layer { position: absolute; top: 35%; width: 100%; text-align: center; pointer-events: none; color: #ff4757; font-size: 30px; font-weight: bold; display: none; text-shadow: 0 0 15px #ff4757; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="400" height="700"></canvas>
+    <div id="hud">
+        <div class="info-left">
+            <div id="score-text">Kills: 0</div>
+            <div id="life-ui">❤️❤️❤️❤️❤️</div>
+            <div id="lv-ui" style="font-size:12px; color:#00d2ff;">Lv.1</div>
+        </div>
+        <div id="time-display">00:00</div>
+        <div id="control-area">
+            <div id="pause-btn" onclick="togglePause()">||</div>
+            <div id="soldier-ui">S: 10</div>
+            <div class="vol-control">
+                <span style="font-size:10px;">🎵</span>
+                <input type="range" id="vol-slider" min="0" max="1" step="0.1" value="0.3">
+            </div>
+        </div>
+    </div>
+    <div id="msg-layer">WARNING: BOSS</div>
+
+    <div id="start-screen" class="screen-overlay">
+        <h1>NEON GALAXY</h1>
+        <div class="time-opts">
+            <button class="opt-btn active" onclick="setLimit(5, this)">5분</button>
+            <button class="opt-btn" onclick="setLimit(10, this)">10분</button>
+            <button class="opt-btn" onclick="setLimit(20, this)">20분</button>
+            <button class="opt-btn" onclick="setLimit(999, this)">무제한</button>
+        </div>
+        <p id="save-info" style="font-size: 11px; color: #666; margin-bottom: 15px;"></p>
+        <button class="btn" style="border-color:#00d2ff; color:#00d2ff;" onclick="initAndStart()">작전 개시</button>
+    </div>
+
+    <div id="pause-screen" class="screen-overlay" style="display:none;"><h1>PAUSED</h1><button class="btn" onclick="togglePause()">전투 복귀</button><button class="btn" onclick="location.reload()">시작화면</button></div>
+    <div id="over-screen" class="screen-overlay" style="display:none;"><h1 id="over-title">MISSION OVER</h1><p id="final-stats" style="margin-bottom: 20px;"></p><button class="btn" onclick="location.reload()">재정비 후 귀환</button></div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
+    let state = 'STOP', score = 0, soldiers = 10, life = 5, level = 1, frame = 0;
+    let playerX = 200, objects = [], bullets = [], stars = [], shield = 0;
+    let isBossAppearing = false, isPaused = false, audioCtx = null, startTime = 0, limitMin = 5;
+
+    const bgm = new Audio('https://cdn.pixabay.com/audio/2022/10/14/audio_9939f770f7.mp3');
+    bgm.loop = true;
+    bgm.volume = 0.3;
+    const volSlider = document.getElementById('vol-slider');
+    volSlider.addEventListener('input', () => { bgm.volume = volSlider.value; });
+
+    for(let i=0; i<60; i++) stars.push({x: Math.random()*400, y: Math.random()*700, s: Math.random()*1.5});
+
+    // --- 레코드 및 시간 설정 시스템 ---
+    function setLimit(m, btn) { 
+        limitMin = m; 
+        document.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active')); 
+        btn.classList.add('active'); 
+        updateSaveInfo(); 
+    }
+    function saveRecord(data) { localStorage.setItem(`galaxy_rec_v14_${limitMin}`, JSON.stringify(data)); }
+    function loadRecord() { return JSON.parse(localStorage.getItem(`galaxy_rec_v14_${limitMin}`)); }
+    function updateSaveInfo() { 
+        const d = loadRecord(); 
+        const tLabel = limitMin === 999 ? "무제한" : limitMin+"분"; 
+        document.getElementById('save-info').innerHTML = d ? `${tLabel} 최고: Lv.${d.level} | ${d.highScore} Kills` : `${tLabel} 기록 없음`; 
+    }
+    updateSaveInfo();
+
+    function playBeep(freq, dur, vol = 0.005) { if (!audioCtx) return; const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.frequency.setValueAtTime(freq, audioCtx.currentTime); gain.gain.setValueAtTime(vol, audioCtx.currentTime); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + dur); }
+
+    function initAndStart() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        bgm.play().catch(()=>{});
+        startTime = Date.now(); score = 0; life = 5; frame = 0; objects = []; bullets = []; shield = 0; level = 1; soldiers = 10;
+        state = 'PLAY'; isPaused = false;
+        document.querySelectorAll('.screen-overlay').forEach(el => el.style.display = 'none');
+        requestAnimationFrame(loop);
+    }
+
+    function togglePause() { if(state !== 'PLAY' && !isPaused) return; isPaused = !isPaused; if(isPaused) bgm.pause(); else bgm.play().catch(()=>{}); document.getElementById('pause-screen').style.display = isPaused ? 'flex' : 'none'; if(!isPaused) requestAnimationFrame(loop); }
+
+    function finalSave() { 
+        const d = loadRecord() || {level:1, highScore:0}; 
+        saveRecord({ level: Math.max(d.level, level), highScore: Math.max(d.highScore, score) }); 
+    }
+
+    function loop() {
+        if(state !== 'PLAY' || isPaused) return;
+        frame++;
+        const elapsedSec = Math.floor((Date.now() - startTime) / 1000);
+        
+        // 시간 UI 처리
+        if(limitMin !== 999) {
+            const remainSec = Math.max(0, (limitMin * 60) - elapsedSec);
+            document.getElementById('time-display').innerText = `${Math.floor(remainSec/60).toString().padStart(2,'0')}:${(remainSec%60).toString().padStart(2,'0')}`;
+            if(remainSec <= 0) { endGame("MISSION CLEAR"); return; }
+        } else {
+            document.getElementById('time-display').innerText = `${Math.floor(elapsedSec/60).toString().padStart(2,'0')}:${(elapsedSec%60).toString().padStart(2,'0')}`;
+        }
+
+        ctx.fillStyle = '#050508'; ctx.fillRect(0,0,400,700);
+        ctx.fillStyle = '#fff'; stars.forEach(st => { st.y += st.s; if(st.y > 700) st.y = 0; ctx.fillRect(st.x, st.y, st.s, st.s); });
+
+        // --- 밸런스: v13의 이지 밸런스 유지 ---
+        const spawnInterval = Math.max(25, 160 - (level * 8) - Math.floor(elapsedSec / 8)); 
+        if(!isBossAppearing && frame % spawnInterval === 0) {
+            let t = 'enemy';
+            const rand = Math.random();
+            let gateProb = (elapsedSec < 30) ? 0.75 : (soldiers < 100 ? 0.55 : 0.35);
+            
+            if(rand < gateProb) t = 'gate';
+            else if(rand < gateProb + 0.05) t = 'heart';
+            else if(rand < gateProb + 0.1) t = 'shield';
+            else t = 'enemy';
+
+            let baseHp = (soldiers * 0.3) + (level * 10) + (elapsedSec * 0.2);
+            if(elapsedSec < 40) baseHp *= 0.4;
+
+            const finalHp = Math.max(1, Math.floor(baseHp * (1 + (Math.random()*0.16 - 0.08))));
+            objects.push({ x: Math.random()*340+30, y: -40, type: t, val: t === 'gate' ? Math.floor(Math.random()*20 + 10 + level) : 5, hp: t === 'enemy' ? finalHp : 0, size: 22 });
+        }
+
+        // 보스 출현 로직
+        if(elapsedSec > 0 && elapsedSec % 60 === 0 && !isBossAppearing) {
+            isBossAppearing = true;
+            document.getElementById('msg-layer').style.display = 'block';
+            setTimeout(() => {
+                document.getElementById('msg-layer').style.display = 'none';
+                objects.push({ x: 200, y: -100, type: 'boss', hp: Math.floor((soldiers + level * 80 + elapsedSec * 2) * 2.2), size: 65 });
+            }, 2000);
+        }
+
+        // --- 화력 집중 시스템 (각도 좁게 유지) ---
+        const fireRate = Math.max(2, 11 - Math.floor(soldiers/350));
+        if(frame % fireRate === 0) {
+            const bX = playerX, bY = 610;
+            if(soldiers < 30) { bullets.push({x: bX, y: bY, vx: 0}); }
+            else { 
+                let count = Math.min(18, Math.floor(soldiers / 70) + 2);
+                for(let i=0; i<count; i++) {
+                    let offset = (i - (count-1)/2) * 8;
+                    let angleX = (i - (count-1)/2) * 0.35; // 좁은 각도
+                    bullets.push({x: bX + offset, y: bY, vx: angleX});
+                }
+            }
+            playBeep(1100, 0.01);
+        }
+
+        let theme = soldiers <= 100 ? '#00d2ff' : (soldiers <= 400 ? '#2ecc71' : '#f1c40f');
+
+        for(let i=objects.length-1; i>=0; i--) {
+            let o = objects[i];
+            const fallSpeed = (o.type === 'boss') ? 0.3 : (1.1 + (level * 0.2) + (elapsedSec / 600));
+            o.y += fallSpeed;
+
+            ctx.lineWidth = 2; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.strokeStyle = (['gate','heart','shield'].includes(o.type)) ? '#2ecc71' : '#ff4757';
+            if(o.type === 'boss') ctx.strokeStyle = '#f1c40f';
+            
+            ctx.beginPath();
+            if(o.type === 'gate') ctx.strokeRect(o.x-40, o.y, 80, 35);
+            else { ctx.arc(o.x, o.y, o.size, 0, 6.28); ctx.stroke(); }
+            
+            if(['enemy','boss'].includes(o.type)) { ctx.fillStyle = '#fff'; ctx.font = '11px arial'; ctx.fillText(o.hp, o.x, o.y); }
+            if(o.type === 'gate') { ctx.fillStyle='#fff'; ctx.font='bold 15px arial'; ctx.fillText('+'+o.val, o.x, o.y+17.5); }
+            
+            bullets.forEach((b, bi) => {
+                if(['enemy','boss'].includes(o.type) && Math.hypot(b.x-o.x, b.y-o.y) < o.size+10) {
+                    o.hp--; bullets.splice(bi, 1);
+                    if(o.hp <= 0) { 
+                        o.dead = true; score += (o.type === 'boss' ? 100 : 1); 
+                        if(o.type === 'boss') { isBossAppearing = false; level++; soldiers += 50; }
+                    }
+                }
+            });
+            if(!o.dead && Math.hypot(o.x-playerX, o.y-620) < 30) {
+                if(o.type === 'gate') soldiers += o.val; else if(o.type === 'heart') life = Math.min(5, life+1); else if(o.type === 'shield') shield = Math.min(30, shield + 10);
+                else { if(shield > 0) shield--; else life -= 1; }
+                o.dead = true;
+            }
+            if(o.y > 750 || o.dead) objects.splice(i, 1);
+        }
+
+        bullets.forEach((b, i) => { b.y -= 15; b.x += b.vx; ctx.fillStyle = theme; ctx.fillRect(b.x-1.5, b.y, 3, 12); if(b.y < -20 || b.x < -20 || b.x > 420) bullets.splice(i, 1); });
+
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#000'; ctx.strokeStyle = theme; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(playerX, 620, 20, 0, 6.28); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 13px arial'; ctx.fillText(Math.floor(soldiers), playerX, 620);
+
+        document.getElementById('score-text').innerText = "Kills: " + score;
+        document.getElementById('life-ui').innerText = "❤️".repeat(life);
+        document.getElementById('soldier-ui').innerText = "S: " + Math.floor(soldiers);
+        document.getElementById('lv-ui').innerText = "Lv." + level;
+        
+        if(life <= 0) endGame("MISSION FAILED"); else requestAnimationFrame(loop);
+    }
+
+    function endGame(title) { 
+        state = 'STOP'; bgm.pause(); 
+        finalSave(); 
+        document.getElementById('over-screen').style.display = 'flex'; 
+        document.getElementById('over-title').innerText = title; 
+        document.getElementById('final-stats').innerText = `Lv.${level} | ${score} Kills`; 
+    }
+    
+    function handleMove(e) { 
+        if(state !== 'PLAY' || isPaused) return; 
+        let rect = canvas.getBoundingClientRect(); 
+        let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        let x = clientX - rect.left; 
+        playerX = Math.max(25, Math.min(375, x * (400 / rect.width))); 
+    }
+    canvas.addEventListener('mousemove', handleMove);
+    canvas.addEventListener('touchmove', (e) => { handleMove(e); e.preventDefault(); }, {passive:false});
+</script>
+</body>
+</html>
