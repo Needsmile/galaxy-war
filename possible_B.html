@@ -159,7 +159,7 @@
 
         let bCount = Math.min(12, Math.floor(soldiers/100)+1);
         let fireRate = Math.max(4, Math.floor(((activeUnit === 'laser') ? 20 : (activeUnit === 'mine' ? 45 : 8)) / buffFireRate));
-        let baseDmg = (activeUnit === 'laser') ? (level * 0.4) : (activeUnit === 'mine' ? (level * 35) : level);
+        let baseDmg = (activeUnit === 'laser') ? (level * 0.4 + soldiers * 0.02) : (activeUnit === 'mine' ? (level * 35) : level);
         
         document.getElementById('dps-ui').innerText = "D: " + Math.floor((60/fireRate) * bCount * baseDmg * (buffClone?1.5:1));
         document.getElementById('soldier-ui').innerText = "S: " + Math.floor(soldiers);
@@ -194,10 +194,21 @@
             }
 
             if(o.type === 'mine') {
-                o.y += o.vy; o.vy *= 0.95; o.timer--; ctx.fillStyle = o.timer%10 < 5 ? '#f00' : '#fff'; ctx.beginPath(); ctx.arc(o.x, o.y, 8, 0, 7); ctx.fill();
+                o.y += o.vy; 
+                o.vy *= 0.95; 
+                o.timer--; 
+
+                objects.forEach(t => {
+                    if (!t.dead && (t.type==='enemy'||t.type==='boss') &&
+                        Math.hypot(o.x - t.x, o.y - t.y) < 20) {
+                        o.timer = 0;
+                    }
+                });
+
+                ctx.fillStyle = o.timer%10 < 5 ? '#f00' : '#fff'; ctx.beginPath(); ctx.arc(o.x, o.y, 8, 0, 7); ctx.fill();
                 if(o.timer <= 0) {
                     o.dead = true; ctx.fillStyle = 'rgba(255,100,0,0.5)'; ctx.beginPath(); ctx.arc(o.x, o.y, 80, 0, 7); ctx.fill();
-                    objects.forEach(t => { if(!t.dead && (t.type==='enemy'||t.type==='boss') && Math.hypot(o.x-t.x, o.y-t.y) < 80) { t.hp -= baseDmg; if(t.hp <= 0) { t.dead = true; exp+=t.xp||100; addFloatingText(t.x, t.y, `EXP +${t.xp||100}`, "#2ecc71"); } }});
+                    objects.forEach(t => { if(!t.dead && (t.type==='enemy'||t.type==='boss') && Math.hypot(o.x-t.x, o.y-t.y) < 80) { t.hp -= baseDmg * 3; if(t.hp <= 0) { t.dead = true; exp+=t.xp||100; addFloatingText(t.x, t.y, `EXP +${t.xp||100}`, "#2ecc71"); } }});
                 }
             }
 
@@ -248,14 +259,64 @@
             }
         }
 
-        for(let i=bullets.length-1; i>=0; i--) {
-            let b=bullets[i]; b.y-=15; ctx.fillStyle = b.type==='laser'?'#ff00ff':(b.type==='missile'?'#ff9f43':'#00d2ff'); ctx.fillRect(b.x-1.5, b.y, 3, 12);
-            for(let o of objects) { if(!o.dead && Math.hypot(b.x-o.x, b.y-o.y)<o.size+15) {
-                if(o.type==='gate') { o.val++; if(!b.pierce && b.type!=='laser') bullets.splice(i,1); break; }
-                else if(o.type==='enemy'||o.type==='boss') { o.hp -= baseDmg * (b.dmgMult||1); if(!b.pierce && b.type!=='laser') bullets.splice(i,1); if(o.hp<=0){ o.dead=true; let xpGain = o.xp || (o.isWhite?150:100); exp+=xpGain; addFloatingText(o.x, o.y, `EXP +${xpGain}`, "#2ecc71"); } break; }
-            }}
-            if(bullets[i] && (b.y<-20 || b.y>720)) bullets.splice(i,1);
-        }
+             for (let i = bullets.length - 1; i >= 0; i--) {
+                let b = bullets[i];
+            
+                // 🔥 MISSILE 유도 이동
+                if (b.type === 'missile' && b.target && !b.target.dead) {
+                    const a = Math.atan2(b.target.y - b.y, b.target.x - b.x);
+                    b.x += Math.cos(a) * 6;
+                    b.y += Math.sin(a) * 6;
+                } else {
+                    b.y -= 15;
+                }
+            
+                // 🎨 탄환 색상 (laser / missile / normal)
+                if (b.type === 'laser') {
+                    ctx.fillStyle = '#ff00ff';
+                } else if (b.type === 'missile') {
+                    ctx.fillStyle = '#ff9f43';
+                } else {
+                    ctx.fillStyle = '#00d2ff';
+                }
+            
+                ctx.fillRect(b.x - 1.5, b.y, 3, 12);
+            
+                // 💥 충돌 판정
+                for (let o of objects) {
+                    if (!o.dead && Math.hypot(b.x - o.x, b.y - o.y) < o.size + 15) {
+            
+                        if (o.type === 'gate') {
+                            o.val++;
+                            if (!b.pierce && b.type !== 'laser') {
+                                bullets.splice(i, 1);
+                            }
+                            break;
+                        }
+            
+                        if (o.type === 'enemy' || o.type === 'boss') {
+                            o.hp -= baseDmg * (b.dmgMult || 1);
+            
+                            if (!b.pierce && b.type !== 'laser') {
+                                bullets.splice(i, 1);
+                            }
+            
+                            if (o.hp <= 0) {
+                                o.dead = true;
+                                let xpGain = o.xp || (o.isWhite ? 150 : 100);
+                                exp += xpGain;
+                                addFloatingText(o.x, o.y, `EXP +${xpGain}`, "#2ecc71");
+                            }
+                            break;
+                        }
+                    }
+                }
+            
+                // 🧹 화면 밖 제거
+                if (bullets[i] && (b.y < -20 || b.y > 720)) {
+                    bullets.splice(i, 1);
+                }
+            }
 
         enemyBullets.forEach((eb,ei)=>{ eb.x+=eb.vx; eb.y+=eb.vy; ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(eb.x,eb.y,5,0,7); ctx.fill(); if(Math.hypot(eb.x-playerX,eb.y-630)<20){life-=0.5; enemyBullets.splice(ei,1);}});
         
