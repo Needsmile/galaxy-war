@@ -75,8 +75,10 @@
 <script>
     const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
     let state = 'STOP', isPaused = false, soldiers = 10, life = 5, level = 1, frame = 0;
+    const MAX_LIFE = 5;
     let exp = 0, nextExp = 100, playerX = 200, objects = [], bullets = [], enemyBullets = [], texts = [], stars = [], limitMin = 5, startTime = 0;
     let activeUnit = null, bossInField = false, warningTimer = 0, lastPauseTime = 0, playTimeStr = "";
+    let stage = 1;
     let buffPierce = false, buffFireRate = 1.0, buffClone = false;
 
     const aCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -85,7 +87,20 @@
 
     function addFloatingText(x, y, txt, col) { texts.push({x, y, txt, col, life: 60, fs: 12}); }
     function setLimit(m, b) { limitMin = m; document.querySelectorAll('.opt-btn').forEach(btn=>btn.classList.remove('active')); b.classList.add('active'); }
+    function dropHeart(x, y) {
+        if (life >= MAX_LIFE) return;
     
+        if (Math.random() < 0.08) {
+            objects.push({
+                x, y,
+                type: 'heart',
+                vy: 1.2,
+                size: 14,
+                heal: 0.5,
+                dead: false
+            });
+        }
+    }
     // 일시정지 기능 복구
     function togglePause() { 
         if(state!=='PLAY') return; 
@@ -147,6 +162,23 @@
         else objects.push({x:sx, y:-50, type:'enemy', shape:'star', hp:level*20, xp:45, vy:1.2, size:28, dead:false});
     }
 
+    function spawnObject() {
+        let gateRate = Math.max(0.6 - stage * 0.08, 0.15);
+
+        if (Math.random() < gateRate) {
+            objects.push({
+                x: Math.random()*300+50,
+                y: -50,
+                type: 'gate',
+                size: 28,
+                val: Math.floor(Math.random()*20 + 10 + stage*2),
+                dead: false
+            });
+        } else {
+            spawnEnemy();
+        }
+    }
+
     function loop() {
         if(state!=='PLAY' || isPaused) return;
         frame++;
@@ -175,14 +207,16 @@
             warningTimer--; document.getElementById('warning-overlay').style.display = 'block';
             if(warningTimer === 0) {
                 document.getElementById('warning-overlay').style.display = 'none'; bossInField = true;
-                objects.push({x:200, y:-80, type:'boss', isWhite:level%5===0, hp:level*1800, size:55, dead:false});
+                objects.push({x:200, y:-80, type:'boss', isWhite:stage%5===0, hp:stage*500+level*200, size:55, dead:false});
             }
         }
 
-        if(!bossInField && warningTimer === 0 && frame % 25 === 0) {
-            if(Math.random() < (level === 1 ? 0.6 : 0.15)) objects.push({x:Math.random()*300+50, y:-50, type:'gate', size:28, val:(level === 1) ? Math.floor(Math.random()*25+15) : (Math.random() < 0.4 ? -Math.floor(soldiers*0.3) : Math.floor(Math.random()*30+20)), dead:false});
-            else spawnEnemy();
-        }
+            let spawnInterval = Math.max(30 - stage * 2, 12);
+            
+            if (!bossInField && warningTimer === 0 && frame % spawnInterval === 0) {
+                spawnObject();
+            }
+
 
         for(let i=objects.length-1; i>=0; i--) {
             let o = objects[i]; 
@@ -209,12 +243,18 @@
                                 exp += xpGain;
                                 addFloatingText(t.x, t.y, `EXP +${xpGain}`, "#2ecc71");
                             }
+                            dropHeart(o.x, o.y);
                         }
                 
                         if (t.type === 'gate') {
-                            t.val -= Math.floor(baseDmg / 2); // 🔥 gate는 약하게
-                            addFloatingText(t.x, t.y, "-GATE", "#ff9f43");
-                            if (t.val <= 0) t.dead = true;
+                            let gateDmg = Math.floor(baseDmg * 1.5); // 🔧 밸런스 포인트
+                            t.val -= gateDmg;
+                
+                            addFloatingText(t.x, t.y, `-${gateDmg}`, "#ff9f43");
+                
+                            if (t.val <= 0) {
+                                t.dead = true;
+                            }
                         }
                     }
                 });
@@ -224,6 +264,11 @@
                     o.dead = true; ctx.fillStyle = 'rgba(255,100,0,0.5)'; ctx.beginPath(); ctx.arc(o.x, o.y, o.radius, 0, Math.PI * 2); ctx.fill();
                     objects.forEach(t => { if(!t.dead && (t.type==='enemy'||t.type==='boss'||t.type==='gate') && Math.hypot(o.x-t.x, o.y-t.y) < o.radius) { t.hp -= baseDmg * 3; if(t.hp <= 0) { t.dead = true; exp+=t.xp||100; addFloatingText(t.x, t.y, `EXP +${t.xp||100}`, "#2ecc71"); } }});
                 }
+            }
+            if (o.type === 'heart' && Math.hypot(o.x-playerX, o.y-630) < 25) {
+                life = Math.min(MAX_LIFE, life + o.heal);
+                addFloatingText(playerX, 600, `HP +${o.heal}`, "#ff6b81");
+                o.dead = true;
             }
 
             if(!o.dead && Math.hypot(o.x-playerX, o.y-630) < o.size+15) {
@@ -239,7 +284,7 @@
 
             if(o.dead) { 
                 if(o.type==='boss') {
-                    bossInField = false; if(o.isWhite) { let r = Math.random(); if(r < 0.33) buffPierce = true; else if(r < 0.66) buffFireRate = 1.5; else buffClone = true; }
+                    bossInField = false; stage++; if(o.isWhite) { let r = Math.random(); if(r < 0.33) buffPierce = true; else if(r < 0.66) buffFireRate = 1.5; else buffClone = true; }
                     isPaused=true; document.getElementById('unit-select-screen').style.display='flex'; 
                 }
                 objects.splice(i,1); continue; 
@@ -299,6 +344,19 @@
                 // 💥 충돌 판정
                 for (let o of objects) {
                     if (!o.dead && Math.hypot(b.x - o.x, b.y - o.y) < o.size + 15) {
+                        if (o.type === 'heart') {
+                            o.y += o.vy;
+                        
+                            ctx.fillStyle = '#ff2d95';
+                            ctx.beginPath();
+                            ctx.arc(o.x, o.y, 10, 0, Math.PI * 2);
+                            ctx.fill();
+                        
+                            ctx.fillStyle = '#fff';
+                            ctx.font = 'bold 10px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.fillText('+HP', o.x, o.y + 3);
+                        }
             
                         if (o.type === 'gate') {
                             o.val++;
@@ -308,23 +366,37 @@
                             break;
                         }
             
-                        if (o.type === 'enemy' || o.type === 'boss') {
-                            o.hp -= baseDmg * (b.dmgMult || 1);
-            
-                            if (!b.pierce && b.type !== 'laser') {
-                                bullets.splice(i, 1);
-                            }
-            
-                            if (o.hp <= 0) {
-                                o.dead = true;
-                                let xpGain = o.xp || (o.isWhite ? 150 : 100);
-                                exp += xpGain;
-                                addFloatingText(o.x, o.y, `EXP +${xpGain}`, "#2ecc71");
-                            }
-                            break;
+                     if (o.type === 'enemy' || o.type === 'boss') {
+                    
+                        if (o.isWhite) {
+                            ctx.strokeStyle = '#fff';
+                            ctx.shadowBlur = 15;
+                            ctx.shadowColor = '#fff';
                         }
+                    
+                        o.hp -= baseDmg * (b.dmgMult || 1);
+                    
+                        if (!b.pierce && b.type !== 'laser') {
+                            bullets.splice(i, 1);
+                        }
+                    
+                        if (o.hp <= 0) {
+                            o.dead = true;
+                    
+                            let xpGain = o.xp ?? (o.isWhite ? 150 : 100);
+                            exp += xpGain;
+                    
+                            addFloatingText(
+                                o.x,
+                                o.y,
+                                `EXP +${xpGain}`,
+                                "#2ecc71"
+                            );
+                        }
+                    
+                        break;
                     }
-                }
+
             
                 // 🧹 화면 밖 제거
                 if (bullets[i] && (b.y < -20 || b.y > 720)) {
