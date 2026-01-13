@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Archer: Critical Strike</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: 'Courier New', monospace; touch-action: none; }
+        .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
+        .glass-panel { background: rgba(0, 10, 25, 0.95); backdrop-filter: blur(15px); border: 2px solid #0ff; padding: 40px; border-radius: 20px; text-align: center; box-shadow: 0 0 50px rgba(0, 255, 255, 0.3); }
+        h1 { font-size: 32px; color: #0ff; text-shadow: 0 0 20px #0ff; margin-bottom: 20px; }
+        input { background: #000; border: 1px solid #0ff; color: #fff; padding: 12px; font-size: 18px; text-align: center; margin-bottom: 20px; outline: none; width: 220px; }
+        .btn { background: transparent; border: 2px solid #0ff; color: #0ff; padding: 12px 30px; font-size: 16px; cursor: pointer; transition: 0.3s; margin: 8px; text-transform: uppercase; font-weight: bold; border-radius: 4px; }
+        .btn:hover { background: #0ff; color: #000; box-shadow: 0 0 20px #0ff; }
+        
+        #game-ui { position: absolute; top: 20px; width: 90%; max-width: 450px; display: flex; flex-direction: column; gap: 10px; z-index: 10; pointer-events: none; }
+        .ui-top-row { display: flex; justify-content: space-between; }
+        .ui-item { color: #fff; font-weight: bold; background: rgba(0,0,0,0.7); padding: 6px 14px; border-left: 3px solid #0ff; font-size: 13px; }
+        
+        #status-hud { display: flex; gap: 10px; margin-top: 5px; }
+        .buff-badge { font-size: 11px; padding: 4px 8px; border-radius: 3px; border: 1px solid; display: flex; align-items: center; gap: 5px; }
+        .buff-ball { border-color: #0f0; color: #0f0; background: rgba(0, 255, 0, 0.1); }
+        .buff-dmg { border-color: #ff0; color: #ff0; background: rgba(255, 255, 0, 0.1); }
+        .buff-crit { border-color: #f00; color: #f00; background: rgba(255, 0, 0, 0.1); }
+
+        #warning-vignette { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; box-shadow: inset 0 0 100px rgba(255,0,0,0); transition: box-shadow 0.3s; z-index: 5; }
+        canvas { border: 1px solid #222; max-height: 92vh; max-width: 95vw; background: #000; }
+    </style>
+</head>
+<body>
+    <div id="warning-vignette"></div>
+    <div id="start-screen" class="overlay">
+        <div class="glass-panel">
+            <h1>NEON ARCHER</h1>
+            <input type="text" id="nickname-input" placeholder="ENTER NAME" maxlength="10">
+            <br>
+            <button class="btn" onclick="startGame()">MISSION START</button>
+        </div>
+    </div>
+
+    <div id="game-ui">
+        <div class="ui-top-row">
+            <div>
+                <div class="ui-item">SCORE: <span id="score-val">0</span></div>
+                <div class="ui-item" style="margin-top:5px;">STAGE: <span id="stage-val">1</span></div>
+            </div>
+            <div style="text-align: right;">
+                <div class="ui-item">BALLS: <span id="ball-val">15</span>/49</div>
+                <div class="btn" onclick="location.reload()" style="padding:5px 10px; margin:5px 0 0 0; font-size:12px; border-color:#f0f; color:#f0f; pointer-events:auto;">RESET</div>
+            </div>
+        </div>
+        <div id="status-hud">
+            <div class="buff-badge buff-ball" id="status-ball">BALL x10</div>
+            <div class="buff-badge buff-dmg" id="status-dmg">DMG x1.0</div>
+            <div class="buff-badge buff-crit" id="status-crit">CRIT 12%</div>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const vignette = document.getElementById("warning-vignette");
+
+        let nickname = "", score = 0, isPaused = false, gameActive = false;
+        const COLS = 7, ROW_PADDING = 20, MAX_BALLS = 49, BALL_RADIUS = 6.0;
+        let startX, startY, monsterHeight, stage = 1, ballTotal = 15, ballDamage = 1.0;
+        
+        // 크리티컬 관련
+        let critChance = 0.15; // 15%
+        let critMultiplier = 2.0; // 2배
+
+        let balls = [], enemies = [], stars = [], floatingTexts = [], particles = [];
+        let isShooting = false, isAiming = false, aimX = 0, aimY = 0;
+        let lastHitTime = 0, shootStartTime = 0;
+
+        function resize() {
+            const ratio = 1.8;
+            let h = window.innerHeight * 0.9;
+            let w = h / ratio;
+            if (w > window.innerWidth * 0.95) { w = window.innerWidth * 0.95; h = w * ratio; }
+            canvas.width = w; canvas.height = h;
+            startX = canvas.width / 2; startY = canvas.height - 110;
+            monsterHeight = (canvas.width - 60) / COLS;
+            createStars();
+        }
+
+        function createStars() {
+            stars = [];
+            for(let i=0; i<80; i++) stars.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, s: Math.random()*2, v: Math.random()*0.3 + 0.1 });
+        }
+
+        function createParticles(x, y, color) {
+            for(let i=0; i<8; i++) {
+                particles.push({
+                    x, y,
+                    vx: (Math.random() - 0.5) * 6,
+                    vy: (Math.random() - 0.5) * 6,
+                    life: 1.0,
+                    color: color
+                });
+            }
+        }
+
+        function startGame() {
+            nickname = document.getElementById("nickname-input").value || "ARCHER";
+            document.getElementById("start-screen").style.display = "none";
+            gameActive = true;
+            initGame();
+            requestAnimationFrame(draw);
+        }
+
+        function spawnMazeRows(yPos = 80, rowIndex = 0) {
+            const size = monsterHeight;
+            const pathIndex = Math.floor(Math.random() * (COLS - 2)) + 1;
+            const stageColor = `hsl(${(stage * 55) % 360}, 100%, 60%)`;
+
+            for(let i=0; i<COLS; i++) {
+                if(i === pathIndex) continue; 
+                let type = "normal", color = stageColor, stroke = 4;
+                let hpBase = rowIndex > 3 ? 1.5 : 4.0;
+                let hp = Math.ceil(stage * hpBase);
+                
+                let rand = Math.random();
+                if (rand < 0.08) { type = "item"; color = "#ffffff"; stroke = 5; } 
+                else if (rowIndex < 2 && rand < 0.35) { type = "trial"; color = "#f00"; hp *= 6; stroke = 8; }
+                enemies.push({ x: 5 + i * (size + 8), y: yPos, w: size, h: size, hp, color, type, stroke });
+            }
+        }
+
+        function updateHUD() {
+            document.getElementById("status-ball").innerText = `BALL x${ballTotal}`;
+            document.getElementById("status-dmg").innerText = `DMG x${ballDamage.toFixed(1)}`;
+            document.getElementById("status-crit").innerText = `CRIT ${(critChance * 100).toFixed(0)}%`;
+        }
+
+        function draw() {
+            if(!gameActive) return;
+            const currentTime = Date.now();
+            ctx.fillStyle = "#00030a"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 배경 별
+            ctx.fillStyle = "#fff";
+            stars.forEach(st => {
+                ctx.globalAlpha = 0.4; ctx.fillRect(st.x, st.y, st.s, st.s);
+                st.y += st.v; if(st.y > canvas.height) st.y = 0;
+            });
+            ctx.globalAlpha = 1.0;
+
+            // 자동 회수 경고
+            if (isShooting && balls.some(b => b.active)) {
+                const elapsed = currentTime - Math.max(lastHitTime, shootStartTime);
+                if (elapsed > 2000) {
+                    vignette.style.boxShadow = `inset 0 0 100px rgba(255,0,0,${(elapsed - 2000) / 1000})`;
+                } else vignette.style.boxShadow = `inset 0 0 100px rgba(255,0,0,0)`;
+                if (elapsed > 3000) {
+                    const activeCount = balls.filter(b => b.active).length;
+                    balls.forEach(b => b.active = false);
+                    score += activeCount * 10;
+                    spawnBuffText(`RECALL: +${activeCount * 10} PTS`, "#f0f");
+                    nextTurn();
+                }
+            }
+
+            // 파티클 그리기
+            particles.forEach((p, i) => {
+                p.x += p.vx; p.y += p.vy; p.life -= 0.03;
+                if(p.life <= 0) particles.splice(i, 1);
+                ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
+                ctx.fillRect(p.x, p.y, 3, 3);
+            });
+            ctx.globalAlpha = 1.0;
+
+            // 적 그리기
+            enemies.forEach(en => {
+                ctx.save();
+                ctx.shadowBlur = 10; ctx.shadowColor = en.color; ctx.strokeStyle = en.color; ctx.lineWidth = en.stroke;
+                ctx.strokeRect(en.x + en.stroke/2, en.y + en.stroke/2, en.w - en.stroke, en.h - en.stroke);
+                ctx.fillStyle = "#fff"; ctx.font = "bold 15px Arial"; ctx.textAlign = "center";
+                ctx.fillText(Math.ceil(en.hp), en.x + en.w/2, en.y + en.h/2 + 6);
+                ctx.restore();
+            });
+
+            // 공 그리기 및 충돌
+            balls.forEach(b => {
+                if(!b.active) return;
+                b.x += b.vx; b.y += b.vy;
+
+                // 벽 충돌 (관통 방지 보정 포함)
+                if(b.x < BALL_RADIUS) { b.x = BALL_RADIUS; b.vx = Math.abs(b.vx); createParticles(b.x, b.y, "#0ff"); }
+                if(b.x > canvas.width - BALL_RADIUS) { b.x = canvas.width - BALL_RADIUS; b.vx = -Math.abs(b.vx); createParticles(b.x, b.y, "#0ff"); }
+                if(b.y < BALL_RADIUS) { b.y = BALL_RADIUS; b.vy = Math.abs(b.vy); createParticles(b.x, b.y, "#0ff"); }
+                if(b.y > canvas.height) { b.active = false; if(balls.every(allB => !allB.active)) nextTurn(); return; }
+
+                enemies.forEach((en, ei) => {
+                    if(b.x + BALL_RADIUS > en.x && b.x - BALL_RADIUS < en.x + en.w && 
+                       b.y + BALL_RADIUS > en.y && b.y - BALL_RADIUS < en.y + en.h) {
+                        
+                        lastHitTime = Date.now();
+                        
+                        // 크리티컬 판정
+                        let finalDmg = b.dmg;
+                        let isCrit = Math.random() < critChance;
+                        if(isCrit) {
+                            finalDmg *= critMultiplier;
+                            spawnBuffText("CRITICAL!", "#f00", b.x, b.y - 20);
+                            createParticles(b.x, b.y, "#f00");
+                        } else {
+                            createParticles(b.x, b.y, "#fff");
+                        }
+
+                        en.hp -= finalDmg;
+                        score += finalDmg;
+
+                        // 관통 방지 반사 로직
+                        const dL = Math.abs((b.x + BALL_RADIUS) - en.x);
+                        const dR = Math.abs((b.x - BALL_RADIUS) - (en.x + en.w));
+                        const dT = Math.abs((b.y + BALL_RADIUS) - en.y);
+                        const dB = Math.abs((b.y - BALL_RADIUS) - (en.y + en.h));
+                        const m = Math.min(dL, dR, dT, dB);
+                        if (m === dL) { b.vx = -Math.abs(b.vx); b.x = en.x - BALL_RADIUS; }
+                        else if (m === dR) { b.vx = Math.abs(b.vx); b.x = en.x + en.w + BALL_RADIUS; }
+                        else if (m === dT) { b.vy = -Math.abs(b.vy); b.y = en.y - BALL_RADIUS; }
+                        else if (m === dB) { b.vy = Math.abs(b.vy); b.y = en.y + en.h + BALL_RADIUS; }
+
+                        if(en.hp <= 0) {
+                            if(en.type === "item") {
+                                if(ballTotal < MAX_BALLS) ballTotal += (Math.floor(Math.random()*2)+1);
+                                else { ballDamage += 0.5; critChance = Math.min(0.5, critChance + 0.02); }
+                            } else if (en.type === "trial") {
+                                ballDamage += 0.2;
+                            }
+                            enemies.splice(ei, 1);
+                            updateHUD();
+                        }
+                    }
+                });
+
+                // 데미지별 시각화
+                ctx.save();
+                let ballColor = b.dmg >= 5 ? "#f0f" : (b.dmg >= 2 ? "#ff0" : "#0ff");
+                ctx.shadowBlur = 10; ctx.shadowColor = ballColor; ctx.fillStyle = ballColor;
+                ctx.beginPath(); ctx.arc(b.x, b.y, BALL_RADIUS + (b.dmg >= 5 ? 2 : (b.dmg >= 2 ? 1 : 0)), 0, Math.PI * 2);
+                ctx.fill(); ctx.restore();
+            });
+
+            // 텍스트 애니메이션
+            floatingTexts.forEach((ft, i) => {
+                ft.y += ft.vy; ft.life -= 0.02;
+                if(ft.life <= 0) floatingTexts.splice(i, 1);
+                ctx.save(); ctx.globalAlpha = ft.life; ctx.fillStyle = ft.color;
+                ctx.font = "bold 14px Arial"; ctx.textAlign = "center";
+                ctx.fillText(ft.text, ft.x, ft.y); ctx.restore();
+            });
+
+            // 조준 및 캐릭터
+            const angle = Math.atan2(aimY - startY, aimX - startX);
+            ctx.save(); ctx.translate(startX, startY);
+            ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI*2); ctx.fillStyle = "#fff"; ctx.fill();
+            if(isAiming && !isShooting) {
+                ctx.rotate(angle);
+                ctx.beginPath(); ctx.arc(0, 0, 35, -Math.PI/2, Math.PI/2);
+                ctx.strokeStyle = "#0ff"; ctx.lineWidth = 4; ctx.stroke();
+            }
+            ctx.restore();
+
+            document.getElementById("score-val").innerText = Math.floor(score);
+            document.getElementById("stage-val").innerText = stage;
+            document.getElementById("ball-val").innerText = ballTotal;
+            requestAnimationFrame(draw);
+        }
+
+        function spawnBuffText(text, color, x = startX, y = startY - 50) {
+            floatingTexts.push({ x, y, text, color, life: 1.0, vy: -1.2 });
+        }
+
+        async function shootBalls(angle) {
+            isShooting = true; balls = [];
+            shootStartTime = Date.now(); lastHitTime = Date.now();
+            for(let i=0; i < ballTotal; i++) {
+                if(!isShooting) break;
+                balls.push({ x: startX, y: startY, vx: Math.cos(angle)*13, vy: Math.sin(angle)*13, active: true, dmg: ballDamage });
+                await new Promise(r => setTimeout(r, 75));
+            }
+        }
+
+        function nextTurn() {
+            isShooting = false; stage++;
+            vignette.style.boxShadow = `inset 0 0 100px rgba(255,0,0,0)`;
+            enemies.forEach(en => en.y += (monsterHeight + ROW_PADDING));
+            spawnMazeRows(80, 0);
+            if (enemies.some(en => en.y > startY - 35)) { alert("GAME OVER! SCORE: " + Math.floor(score)); location.reload(); }
+        }
+
+        function initGame() {
+            for(let i=0; i<5; i++) spawnMazeRows(80 + i*(monsterHeight + ROW_PADDING), i);
+            updateHUD();
+        }
+
+        function updateAim(e) {
+            const rect = canvas.getBoundingClientRect();
+            const cx = e.touches ? e.touches[0].clientX : e.clientX;
+            const cy = e.touches ? e.touches[0].clientY : e.clientY;
+            aimX = cx - rect.left; aimY = cy - rect.top;
+        }
+
+        resize();
+        canvas.addEventListener("mousedown", (e) => { if(!isShooting) isAiming = true; updateAim(e); });
+        window.addEventListener("mousemove", (e) => { if(isAiming) updateAim(e); });
+        window.addEventListener("mouseup", () => { if(isAiming) { isAiming = false; shootBalls(Math.atan2(aimY - startY, aimX - startX)); } });
+        canvas.addEventListener("touchstart", (e) => { e.preventDefault(); if(!isShooting) isAiming = true; updateAim(e); });
+        window.addEventListener("touchmove", (e) => { updateAim(e); });
+        window.addEventListener("touchend", () => { if(isAiming) { isAiming = false; shootBalls(Math.atan2(aimY - startY, aimX - startX)); } });
+    </script>
+</body>
+</html>
