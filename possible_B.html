@@ -175,7 +175,7 @@
             warningTimer--; document.getElementById('warning-overlay').style.display = 'block';
             if(warningTimer === 0) {
                 document.getElementById('warning-overlay').style.display = 'none'; bossInField = true;
-                objects.push({x:200, y:-80, type:'boss', isWhite:level%5===0, hp:level*2000, size:60, dead:false});
+                objects.push({x:200, y:-80, type:'boss', isWhite:level%5===0, hp:level*1800, size:55, dead:false});
             }
         }
 
