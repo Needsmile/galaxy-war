@@ -221,7 +221,7 @@
 
                 ctx.fillStyle = o.timer%10 < 5 ? '#f00' : '#fff'; ctx.beginPath(); ctx.arc(o.x, o.y, 8, 0, 7); ctx.fill();
                 if(o.timer <= 0) {
-                    o.dead = true; ctx.fillStyle = 'rgba(255,100,0,0.5)'; ctx.beginPath(); ctx.arc(o.x, o.y, radius, 0, Math.PI * 2); ctx.fill();
+                    o.dead = true; ctx.fillStyle = 'rgba(255,100,0,0.5)'; ctx.beginPath(); ctx.arc(o.x, o.y, o.radius, 0, Math.PI * 2); ctx.fill();
                     objects.forEach(t => { if(!t.dead && (t.type==='enemy'||t.type==='boss'||t.type==='gate') && Math.hypot(o.x-t.x, o.y-t.y) < o.radius) { t.hp -= baseDmg * 3; if(t.hp <= 0) { t.dead = true; exp+=t.xp||100; addFloatingText(t.x, t.y, `EXP +${t.xp||100}`, "#2ecc71"); } }});
                 }
             }
