@@ -198,17 +198,31 @@
                 o.vy *= 0.95; 
                 o.timer--; 
 
-                objects.forEach(t => {
-                    if (!t.dead && (t.type==='enemy'||t.type==='boss') &&
-                        Math.hypot(o.x - t.x, o.y - t.y) < 20) {
-                        o.timer = 0;
+               objects.forEach(t => {
+                    if (!t.dead && Math.hypot(o.x - t.x, o.y - t.y) < o.radius) {
+                
+                        if (t.type === 'enemy' || t.type === 'boss') {
+                            t.hp -= baseDmg * 3;
+                            if (t.hp <= 0) {
+                                t.dead = true;
+                                let xpGain = t.xp || (t.isWhite ? 150 : 100);
+                                exp += xpGain;
+                                addFloatingText(t.x, t.y, `EXP +${xpGain}`, "#2ecc71");
+                            }
+                        }
+                
+                        if (t.type === 'gate') {
+                            t.val -= Math.floor(baseDmg / 2); // 🔥 gate는 약하게
+                            addFloatingText(t.x, t.y, "-GATE", "#ff9f43");
+                            if (t.val <= 0) t.dead = true;
+                        }
                     }
                 });
 
                 ctx.fillStyle = o.timer%10 < 5 ? '#f00' : '#fff'; ctx.beginPath(); ctx.arc(o.x, o.y, 8, 0, 7); ctx.fill();
                 if(o.timer <= 0) {
-                    o.dead = true; ctx.fillStyle = 'rgba(255,100,0,0.5)'; ctx.beginPath(); ctx.arc(o.x, o.y, 80, 0, 7); ctx.fill();
-                    objects.forEach(t => { if(!t.dead && (t.type==='enemy'||t.type==='boss') && Math.hypot(o.x-t.x, o.y-t.y) < 80) { t.hp -= baseDmg * 3; if(t.hp <= 0) { t.dead = true; exp+=t.xp||100; addFloatingText(t.x, t.y, `EXP +${t.xp||100}`, "#2ecc71"); } }});
+                    o.dead = true; ctx.fillStyle = 'rgba(255,100,0,0.5)'; ctx.beginPath(); ctx.arc(o.x, o.y, radius, 0, Math.PI * 2); ctx.fill();
+                    objects.forEach(t => { if(!t.dead && (t.type==='enemy'||t.type==='boss'||t.type==='gate') && Math.hypot(o.x-t.x, o.y-t.y) < o.radius) { t.hp -= baseDmg * 3; if(t.hp <= 0) { t.dead = true; exp+=t.xp||100; addFloatingText(t.x, t.y, `EXP +${t.xp||100}`, "#2ecc71"); } }});
                 }
             }
 
@@ -249,7 +263,7 @@
         }
 
         if(frame % fireRate === 0) {
-            if(activeUnit === 'mine') objects.push({x:playerX, y:600, type:'mine', timer:50, size:10, vy:-5, dead:false});
+            if(activeUnit === 'mine') objects.push({x:playerX, y:600, type:'mine', timer:40, size:10, vy:-10, radius: 120, dead:false});
             else {
                 for(let i=0; i<bCount; i++) {
                     let bx = playerX+(i-(bCount-1)/2)*10;
