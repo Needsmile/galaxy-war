@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Archer: Auto-Recall System</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: 'Courier New', monospace; touch-action: none; }
+        .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; }
+        .glass-panel { background: rgba(0, 10, 25, 0.95); backdrop-filter: blur(15px); border: 2px solid #0ff; padding: 40px; border-radius: 20px; text-align: center; box-shadow: 0 0 50px rgba(0, 255, 255, 0.3); }
+        h1 { font-size: 32px; color: #0ff; text-shadow: 0 0 20px #0ff; margin-bottom: 20px; }
+        input { background: #000; border: 1px solid #0ff; color: #fff; padding: 12px; font-size: 18px; text-align: center; margin-bottom: 20px; outline: none; width: 220px; }
+        .btn { background: transparent; border: 2px solid #0ff; color: #0ff; padding: 12px 30px; font-size: 16px; cursor: pointer; transition: 0.3s; margin: 8px; text-transform: uppercase; font-weight: bold; border-radius: 4px; }
+        .btn:hover { background: #0ff; color: #000; box-shadow: 0 0 20px #0ff; }
+
+        #game-ui { position: absolute; top: 20px; width: 90%; max-width: 450px; display: flex; justify-content: space-between; z-index: 10; pointer-events: none; }
+        .ui-item { color: #fff; font-weight: bold; background: rgba(0,0,0,0.7); padding: 6px 14px; border-left: 3px solid #0ff; font-size: 13px; margin-bottom: 5px; }
+        .pause-btn { pointer-events: auto; cursor: pointer; border: 1px solid #f0f; color: #f0f; padding: 8px 15px; background: rgba(0,0,0,0.5); font-weight: bold; }
+        
+        #record-overlay { display: none; background: rgba(0,0,0,0.9); z-index: 200; }
+        #card-preview { border: 4px solid #0ff; box-shadow: 0 0 30px #0ff; margin-bottom: 20px; background: #000; max-width: 80vw; max-height: 60vh; }
+
+        canvas { border: 1px solid #222; max-height: 92vh; max-width: 95vw; }
+    </style>
+</head>
+<body>
+    <div id="start-screen" class="overlay">
+        <div class="glass-panel">
+            <h1>NEON ARCHER</h1>
+            <input type="text" id="nickname-input" placeholder="ENTER NAME" maxlength="10">
+            <br>
+            <button class="btn" onclick="startGame()">MISSION START</button>
+        </div>
+    </div>
+
+    <div id="pause-screen" class="overlay" style="display:none; background: rgba(0,0,0,0.8);">
+        <div class="glass-panel" style="border-color: #f0f;">
+            <h1 style="color:#f0f;">PAUSED</h1>
+            <button class="btn" onclick="togglePause()" style="border-color:#f0f; color:#f0f;">RESUME</button>
+            <button class="btn" onclick="showRecordCard()" style="border-color:#0f0; color:#0f0;">QUIT & RESULT</button>
+        </div>
+    </div>
+
+    <div id="record-overlay" class="overlay">
+        <h2 style="color:#fff; margin-bottom:15px;">MISSION RECORD</h2>
+        <canvas id="card-preview"></canvas>
+        <div>
+            <button class="btn" onclick="downloadCard()" style="border-color:#ff0; color:#ff0;">SAVE IMAGE</button>
+            <button class="btn" onclick="location.reload()" style="border-color:#fff; color:#fff;">RESTART</button>
+        </div>
+    </div>
+
+    <div id="game-ui">
+        <div>
+            <div class="ui-item">SCORE: <span id="score-val">0</span></div>
+            <div class="ui-item">STAGE: <span id="stage-val">1</span></div>
+        </div>
+        <div style="text-align: right;">
+            <div class="ui-item">BALLS: <span id="ball-val">15</span>/49</div>
+            <div class="pause-btn" onclick="togglePause()">PAUSE</div>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        let nickname = "", score = 0, isPaused = false, gameActive = false;
+        const COLS = 7, ROW_PADDING = 20, MAX_BALLS = 49, BALL_RADIUS = 6.0;
+        let startX, startY, monsterHeight, stage = 1, ballTotal = 15, ballDamage = 1;
+        let balls = [], enemies = [], stars = [], floatingTexts = [];
+        let isShooting = false, isAiming = false, aimX = 0, aimY = 0;
+
+        // --- 공 회수 관련 변수 ---
+        let lastHitTime = 0;
+        let shootStartTime = 0;
+
+        function resize() {
+            const ratio = 1.8;
+            let h = window.innerHeight * 0.9;
+            let w = h / ratio;
+            if (w > window.innerWidth * 0.95) { w = window.innerWidth * 0.95; h = w * ratio; }
+            canvas.width = w; canvas.height = h;
+            startX = canvas.width / 2; startY = canvas.height - 110;
+            monsterHeight = (canvas.width - 60) / COLS;
+            createStars();
+        }
+
+        function createStars() {
+            stars = [];
+            for(let i=0; i<120; i++) stars.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, s: Math.random()*2, v: Math.random()*0.3 + 0.1 });
+        }
+
+        function startGame() {
+            nickname = document.getElementById("nickname-input").value || "ARCHER";
+            document.getElementById("start-screen").style.display = "none";
+            gameActive = true;
+            initGame();
+            requestAnimationFrame(draw);
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            document.getElementById("pause-screen").style.display = isPaused ? "flex" : "none";
+        }
+
+        function showRecordCard() {
+            gameActive = false;
+            const card = document.getElementById('card-preview');
+            const cctx = card.getContext('2d');
+            card.width = 500; card.height = 700;
+            cctx.fillStyle = '#000'; cctx.fillRect(0,0,500,700);
+            cctx.strokeStyle = '#0ff'; cctx.lineWidth = 8; cctx.strokeRect(15,15,470,670);
+            cctx.textAlign = 'center'; cctx.shadowBlur = 15; cctx.shadowColor = '#0ff';
+            cctx.fillStyle = '#0ff'; cctx.font = 'bold 30px Courier New';
+            cctx.fillText('COSMIC RECORD', 250, 80);
+            cctx.fillStyle = '#fff'; cctx.font = '20px Courier New';
+            cctx.fillText('PLAYER', 250, 180);
+            cctx.fillStyle = '#0ff'; cctx.font = 'bold 45px Courier New';
+            cctx.fillText(nickname.toUpperCase(), 250, 240);
+            cctx.fillStyle = '#fff'; cctx.font = '20px Courier New';
+            cctx.fillText('TOTAL SCORE', 250, 360);
+            cctx.fillStyle = '#ff0'; cctx.font = 'bold 70px Courier New';
+            cctx.shadowColor = '#ff0';
+            cctx.fillText(Math.floor(score).toLocaleString(), 250, 440);
+            cctx.fillStyle = '#fff'; cctx.font = '20px Courier New';
+            cctx.fillText('MAX STAGE', 250, 540);
+            cctx.fillStyle = '#f0f'; cctx.font = 'bold 45px Courier New';
+            cctx.shadowColor = '#f0f';
+            cctx.fillText(`LV.${stage}`, 250, 600);
+            document.getElementById('pause-screen').style.display = 'none';
+            document.getElementById('record-overlay').style.display = 'flex';
+        }
+
+        function downloadCard() {
+            const link = document.createElement('a');
+            link.download = `Record_${nickname}.png`;
+            link.href = document.getElementById('card-preview').toDataURL();
+            link.click();
+        }
+
+        function spawnMazeRows(yPos = 80) {
+            const size = monsterHeight;
+            const pathIndex = Math.floor(Math.random() * (COLS - 2)) + 1;
+            const stageColor = `hsl(${(stage * 55) % 360}, 100%, 60%)`;
+            const isTopRow = yPos < 150; 
+
+            for(let i=0; i<COLS; i++) {
+                if(i === pathIndex) continue; 
+                let type = "normal", color = stageColor, stroke = 4, hp = Math.ceil(stage * 3.5);
+                let rand = Math.random();
+                if (rand < 0.08) { type = "item"; color = "#ffffff"; stroke = 5; } 
+                else if ((isTopRow && rand < 0.4) || (rand < 0.2 && stage > 8)) { 
+                    type = "trial"; color = "#f00"; hp *= 6; stroke = 8; 
+                }
+                enemies.push({ x: 5 + i * (size + 8), y: yPos, w: size, h: size, hp, color, type, stroke });
+            }
+        }
+
+        function drawCharacter() {
+            const angle = Math.atan2(aimY - startY, aimX - startX);
+            ctx.save(); ctx.setLineDash([]);
+            ctx.translate(startX, startY);
+            const s = isShooting ? 0.7 : 1.0; ctx.scale(s, s);
+            ctx.shadowBlur = 20; ctx.shadowColor = "#0ff";
+            ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI*2); ctx.fillStyle = "#fff"; ctx.fill();
+            ctx.rotate(angle);
+            ctx.beginPath(); ctx.arc(0, 0, 35, -Math.PI/2, Math.PI/2);
+            ctx.strokeStyle = "#0ff"; ctx.lineWidth = 4; ctx.stroke();
+            ctx.restore();
+
+            if(isAiming && !isShooting) {
+                ctx.save(); ctx.setLineDash([5, 10]);
+                ctx.strokeStyle = "rgba(0,255,255,0.6)";
+                ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(aimX, aimY); ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        function draw() {
+            if(!gameActive) return;
+            if(!isPaused) {
+                const currentTime = Date.now();
+                ctx.setLineDash([]);
+                ctx.fillStyle = "#00030a"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#fff";
+                stars.forEach(st => {
+                    ctx.globalAlpha = 0.4; ctx.fillRect(st.x, st.y, st.s, st.s);
+                    st.y += st.v; if(st.y > canvas.height) st.y = 0;
+                });
+                ctx.globalAlpha = 1.0;
+
+                // --- 자동 회수 체크 로직 ---
+                if (isShooting && balls.some(b => b.active)) {
+                    // 마지막 타격 후 3초가 지났거나, 발사 시작 후 너무 오래 타격이 없는 경우
+                    if (currentTime - lastHitTime > 3000 && currentTime - shootStartTime > 3000) {
+                        balls.forEach(b => b.active = false);
+                        spawnBuffText("RECALLING...", "#f0f");
+                        nextTurn();
+                    }
+                }
+
+                enemies.forEach(en => {
+                    ctx.save();
+                    ctx.shadowBlur = en.type === "item" ? 25 : 15;
+                    ctx.shadowColor = en.color; ctx.strokeStyle = en.color; ctx.lineWidth = en.stroke;
+                    ctx.strokeRect(en.x + en.stroke/2, en.y + en.stroke/2, en.w - en.stroke, en.h - en.stroke);
+                    ctx.fillStyle = en.type === "item" ? "#ff0" : "#fff";
+                    ctx.font = "bold 15px Arial"; ctx.textAlign = "center";
+                    ctx.shadowBlur = 0; ctx.fillText(Math.ceil(en.hp), en.x + en.w/2, en.y + en.h/2 + 6);
+                    ctx.restore();
+                });
+
+                balls.forEach(b => {
+                    if(!b.active) return;
+                    b.x += b.vx; b.y += b.vy;
+                    if(b.x < BALL_RADIUS || b.x > canvas.width - BALL_RADIUS) b.vx *= -1;
+                    if(b.y < BALL_RADIUS) b.vy *= -1;
+                    if(b.y > canvas.height) { b.active = false; if(balls.every(allB => !allB.active)) nextTurn(); return; }
+
+                    enemies.forEach((en, ei) => {
+                        if(b.x + BALL_RADIUS > en.x && b.x - BALL_RADIUS < en.x + en.w && b.y + BALL_RADIUS > en.y && b.y - BALL_RADIUS < en.y + en.h) {
+                            lastHitTime = Date.now(); // 타격 시 시간 갱신
+                            en.hp -= b.dmg; score += b.dmg;
+                            if(b.x < en.x || b.x > en.x + en.w) b.vx *= -1; else b.vy *= -1;
+                            if(en.hp <= 0) {
+                                if(en.type === "item") {
+                                    if(ballTotal < MAX_BALLS) {
+                                        let add = Math.floor(Math.random() * 2) + 1;
+                                        ballTotal = Math.min(MAX_BALLS, ballTotal + add);
+                                        spawnBuffText(`+${add} BALLS`, "#0f0");
+                                    } else {
+                                        ballDamage += 0.5; spawnBuffText("DMG UP!", "#ff0");
+                                    }
+                                }
+                                enemies.splice(ei, 1);
+                            }
+                        }
+                    });
+                    ctx.fillStyle = b.dmg > 1 ? "#ff0" : "#0ff";
+                    ctx.beginPath(); ctx.arc(b.x, b.y, BALL_RADIUS, 0, Math.PI*2); ctx.fill();
+                });
+
+                floatingTexts.forEach((ft, i) => {
+                    ft.y += ft.vy; ft.life -= 0.02;
+                    if(ft.life <= 0) floatingTexts.splice(i, 1);
+                    ctx.save(); ctx.globalAlpha = ft.life; ctx.fillStyle = ft.color;
+                    ctx.font = "bold 18px Arial"; ctx.textAlign = "center";
+                    ctx.fillText(ft.text, ft.x, ft.y); ctx.restore();
+                });
+
+                drawCharacter();
+                document.getElementById("score-val").innerText = Math.floor(score);
+                document.getElementById("stage-val").innerText = stage;
+                document.getElementById("ball-val").innerText = ballTotal;
+            }
+            requestAnimationFrame(draw);
+        }
+
+        function spawnBuffText(text, color) {
+            floatingTexts.push({ x: startX, y: startY - 50, text, color, life: 1.0, vy: -1.2 });
+        }
+
+        async function shootBalls(angle) {
+            isShooting = true; balls = [];
+            shootStartTime = Date.now(); // 발사 시작 시간
+            lastHitTime = Date.now();    // 초기 타격 시간 초기화
+            const count = ballTotal; 
+            for(let i=0; i < count; i++) {
+                if(!isShooting) break; // 회수되었을 경우 발사 중단
+                balls.push({ x: startX, y: startY, vx: Math.cos(angle)*13, vy: Math.sin(angle)*13, active: true, dmg: Math.floor(ballDamage) });
+                await new Promise(r => setTimeout(r, 75));
+            }
+        }
+
+        function nextTurn() {
+            isShooting = false; stage++;
+            enemies.forEach(en => en.y += (monsterHeight + ROW_PADDING));
+            spawnMazeRows(80);
+            if (enemies.some(en => en.y > startY - 35)) showRecordCard();
+        }
+
+        function initGame() {
+            for(let i=0; i<5; i++) { stage = i+1; spawnMazeRows(80 + i*(monsterHeight + ROW_PADDING)); }
+            stage = 1;
+        }
+
+        function updateAim(e) {
+            const rect = canvas.getBoundingClientRect();
+            const cx = e.touches ? e.touches[0].clientX : e.clientX;
+            const cy = e.touches ? e.touches[0].clientY : e.clientY;
+            aimX = cx - rect.left; aimY = cy - rect.top;
+        }
+
+        resize();
+        canvas.addEventListener("mousedown", (e) => { if(!isShooting && !isPaused) isAiming = true; updateAim(e); });
+        window.addEventListener("mousemove", (e) => { if(isAiming) updateAim(e); });
+        window.addEventListener("mouseup", () => { if(isAiming) { isAiming = false; shootBalls(Math.atan2(aimY - startY, aimX - startX)); } });
+        canvas.addEventListener("touchstart", (e) => { e.preventDefault(); if(!isShooting && !isPaused) isAiming = true; updateAim(e); });
+        window.addEventListener("touchmove", (e) => { updateAim(e); });
+        window.addEventListener("touchend", () => { if(isAiming) { isAiming = false; shootBalls(Math.atan2(aimY - startY, aimX - startX)); } });
+    </script>
+</body>
+</html>
