@@ -146,7 +146,7 @@
         const link = document.createElement('a'); link.href = dataUrl; link.download = `GalaxyWar_Record.png`; link.click();
     }
 
-    function startGame() { 
+    window.startGame = function () { 
         state='PLAY'; soldiers=10; life=5; level=1; exp=0; nextExp=100; activeUnit=null; 
         objects=[]; bullets=[]; enemyBullets=[]; texts=[]; buffPierce=false; buffFireRate=1.0; buffClone=false;
         document.getElementById('start-screen').style.display='none'; startTime=Date.now(); requestAnimationFrame(loop); 
@@ -424,4 +424,5 @@
 </script>
 </body>
 </html>
+
 
