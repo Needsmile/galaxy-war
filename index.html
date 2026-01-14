@@ -81,14 +81,6 @@
     let stage = 1;
     let buffPierce = false, buffFireRate = 1.0, buffClone = false;
 
-    /* ===== HTML onclick용 전역 등록 (필수) ===== */
-    window.startGame = startGame;
-    window.togglePause = togglePause;
-    window.applyUnit = applyUnit;
-    window.goHome = goHome;
-    window.captureRecord = captureRecord;
-    window.setLimit = setLimit;
-
     const aCtx = new (window.AudioContext || window.webkitAudioContext)();
     function playBeep(f, d) { try { let o=aCtx.createOscillator(), g=aCtx.createGain(); o.type='square'; o.frequency.value=f; g.gain.value=0.01; o.connect(g); g.connect(aCtx.destination); o.start(); o.stop(aCtx.currentTime+d); } catch(e){} }
     for(let i=0; i<80; i++) stars.push({x: Math.random()*400, y: Math.random()*700, s: Math.random()*1.5});
@@ -407,6 +399,7 @@
                     }
 
                 }
+	    }
                 // 🧹 화면 밖 제거
                 if (bullets[i] && (b.y < -20 || b.y > 720)) {
                     bullets.splice(i, 1);
@@ -429,9 +422,17 @@
     canvas.addEventListener('mousemove', mv);
     canvas.addEventListener('touchstart', (e) => { if(state==='PLAY') mv(e); });
     canvas.addEventListener('touchmove', (e) => { mv(e); e.preventDefault(); }, {passive:false});
+
+    /* ===== HTML onclick용 전역 등록 (필수) ===== */
+    window.startGame = startGame;
+    window.togglePause = togglePause;
+    window.applyUnit = applyUnit;
+    window.goHome = goHome;
+    window.captureRecord = captureRecord;
+    window.setLimit = setLimit;
+
 </script>
 </body>
 </html>
-
 
 
