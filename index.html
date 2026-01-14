@@ -81,6 +81,14 @@
     let stage = 1;
     let buffPierce = false, buffFireRate = 1.0, buffClone = false;
 
+    /* ===== HTML onclick용 전역 등록 (필수) ===== */
+    window.startGame = startGame;
+    window.togglePause = togglePause;
+    window.applyUnit = applyUnit;
+    window.goHome = goHome;
+    window.captureRecord = captureRecord;
+    window.setLimit = setLimit;
+
     const aCtx = new (window.AudioContext || window.webkitAudioContext)();
     function playBeep(f, d) { try { let o=aCtx.createOscillator(), g=aCtx.createGain(); o.type='square'; o.frequency.value=f; g.gain.value=0.01; o.connect(g); g.connect(aCtx.destination); o.start(); o.stop(aCtx.currentTime+d); } catch(e){} }
     for(let i=0; i<80; i++) stars.push({x: Math.random()*400, y: Math.random()*700, s: Math.random()*1.5});
@@ -146,7 +154,7 @@
         const link = document.createElement('a'); link.href = dataUrl; link.download = `GalaxyWar_Record.png`; link.click();
     }
 
-    window.startGame = function () { 
+    function startGame() { 
         state='PLAY'; soldiers=10; life=5; level=1; exp=0; nextExp=100; activeUnit=null; 
         objects=[]; bullets=[]; enemyBullets=[]; texts=[]; buffPierce=false; buffFireRate=1.0; buffClone=false;
         document.getElementById('start-screen').style.display='none'; startTime=Date.now(); requestAnimationFrame(loop); 
@@ -424,5 +432,6 @@
 </script>
 </body>
 </html>
+
 
 
