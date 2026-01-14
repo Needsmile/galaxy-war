@@ -3,246 +3,423 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GALAXY WAR: FINAL</title>
+    <title>GALAXY WAR v36.5</title>
     <style>
-        * { touch-action: none; -webkit-user-select: none; box-sizing: border-box; }
-        body { margin: 0; background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; font-family: sans-serif; }
-        #game-container { position: relative; width: 400px; height: 700px; background: #050508; overflow: hidden; border: 1px solid #333; }
+        * { touch-action: none; -webkit-user-select: none; box-sizing: border-box; outline: none; }
+        body { margin: 0; background: #000; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; font-family: 'Segoe UI', sans-serif; }
+        #game-container { position: relative; width: 100%; max-width: 400px; height: 100%; max-height: 700px; background: #010103; overflow: hidden; border: 1px solid #1a1a2e; }
         canvas { width: 100%; height: 100%; display: block; }
-        #hud { position: absolute; top: 0; width: 100%; pointer-events: none; z-index: 10; color: white; padding: 15px; }
-        .info-left { display: flex; flex-direction: column; gap: 4px; }
-        #life-ui { color: #ff4757; letter-spacing: 2px; font-size: 14px; text-shadow: 0 0 5px #ff4757; }
-        #time-display { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); font-size: 18px; font-weight: bold; color: #f1c40f; text-shadow: 0 0 8px #f1c40f; }
-        #control-area { position: absolute; top: 15px; right: 15px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-        #pause-btn { width: 35px; height: 35px; background: rgba(255,255,255,0.1); border: 1px solid #fff; color: white; border-radius: 5px; cursor: pointer; pointer-events: auto; display: flex; align-items: center; justify-content: center; font-weight: bold; }
-        #soldier-ui { font-size: 12px; font-weight: bold; background: rgba(0,0,0,0.6); padding: 3px 8px; border: 1px solid #00d2ff; border-radius: 4px; }
-        .vol-control { pointer-events: auto; display: flex; align-items: center; gap: 5px; margin-top: 5px; }
-        #vol-slider { width: 60px; height: 4px; cursor: pointer; accent-color: #f1c40f; }
-        .screen-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; color: white; padding: 20px; text-align: center; }
-        h1 { color: #00d2ff; margin-bottom: 5px; font-size: 28px; letter-spacing: 2px; }
-        .time-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; width: 220px; }
-        .opt-btn { padding: 10px; font-size: 12px; background: #1a1a1a; border: 1px solid #444; color: #fff; cursor: pointer; border-radius: 4px; }
-        .opt-btn.active { border-color: #f1c40f; color: #f1c40f; background: #332b00; }
-        .btn { padding: 12px 25px; font-size: 16px; background: transparent; color: white; border: 1px solid #fff; border-radius: 4px; cursor: pointer; margin: 5px; width: 220px; transition: 0.3s; }
-        #msg-layer { position: absolute; top: 35%; width: 100%; text-align: center; pointer-events: none; color: #ff4757; font-size: 30px; font-weight: bold; display: none; text-shadow: 0 0 15px #ff4757; }
+        .hud-item { position: absolute; z-index: 10; pointer-events: none; }
+        #top-center { top: 15px; left: 50%; transform: translateX(-50%); font-size: 22px; font-weight: bold; color: #f1c40f; }
+        #top-right { top: 15px; right: 10px; pointer-events: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+        .stat-box { background: rgba(0,210,255,0.1); border: 1px solid rgba(0,210,255,0.5); min-width: 75px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 4px; font-size: 11px; color: #00d2ff; font-weight: bold; }
+        .screen-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; color: white; text-align: center; padding: 20px; }
+        .btn { padding: 15px 25px; font-size: 18px; background: rgba(0,210,255,0.1); color: #00d2ff; border: 1px solid #00d2ff; border-radius: 12px; cursor: pointer; margin: 10px; width: 100%; max-width: 280px; font-weight: bold; }
+        .btn-record { background: #f1c40f; color: #000; border: none; }
+        .opt-btn { padding: 12px; background: #111; border: 1px solid #333; color: #888; border-radius: 8px; cursor: pointer; margin: 5px; width: 90px; font-size: 11px; }
+        .opt-btn.active { border-color: #f1c40f; color: #f1c40f; }
+        #warning-overlay { position: absolute; top: 40%; left: 0; width: 100%; background: rgba(255, 0, 0, 0.4); color: #fff; font-size: 30px; font-weight: 900; text-align: center; padding: 20px 0; display: none; z-index: 50; animation: blink 0.5s infinite; border-top: 4px solid #ff0000; border-bottom: 4px solid #ff0000; }
+        @keyframes blink { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+        #exp-bar-container { position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background: #222; z-index: 20; }
+        #exp-bar { width: 0%; height: 100%; background: #00ff00; }
     </style>
 </head>
 <body>
 
 <div id="game-container">
     <canvas id="gameCanvas" width="400" height="700"></canvas>
-    <div id="hud">
-        <div class="info-left">
-            <div id="score-text">Kills: 0</div>
-            <div id="life-ui">❤️❤️❤️❤️❤️</div>
-            <div id="lv-ui" style="font-size:12px; color:#00d2ff;">Lv.1</div>
-        </div>
-        <div id="time-display">00:00</div>
-        <div id="control-area">
-            <div id="pause-btn" onclick="togglePause()">||</div>
-            <div id="soldier-ui">S: 10</div>
-            <div class="vol-control">
-                <span style="font-size:10px;">🎵</span>
-                <input type="range" id="vol-slider" min="0" max="1" step="0.1" value="0.3">
-            </div>
-        </div>
+    <div id="warning-overlay">⚠️ WARNING ⚠️</div>
+    <div id="exp-bar-container"><div id="exp-bar"></div></div>
+    
+    <div id="top-left" class="hud-item" style="top:15px; left:10px;">
+        <div id="life-ui" style="font-size: 16px;"></div>
+        <div id="score-ui" style="color: #aaa; font-size: 11px; margin-top: 4px; font-weight: bold;">EXP: 0 / 100</div>
     </div>
-    <div id="msg-layer">WARNING: BOSS</div>
+    <div id="top-center" class="hud-item">--:--</div>
+    <div id="top-right" class="hud-item">
+        <div id="pause-btn" onclick="togglePause()" style="cursor:pointer; background:rgba(255,255,255,0.1); border:1px solid #fff; padding:3px 12px; border-radius:6px; font-size:11px; color:white; pointer-events: auto;">PAUSE</div>
+        <div id="lv-ui" class="stat-box" style="color:#a55eea;">LV: 1</div>
+        <div id="soldier-ui" class="stat-box">S: 10</div>
+        <div id="dps-ui" class="stat-box" style="color:#f1c40f;">D: 0</div>
+    </div>
 
     <div id="start-screen" class="screen-overlay">
-        <h1>NEON GALAXY</h1>
-        <div class="time-opts">
-            <button class="opt-btn active" onclick="setLimit(5, this)">5분</button>
-            <button class="opt-btn" onclick="setLimit(10, this)">10분</button>
-            <button class="opt-btn" onclick="setLimit(20, this)">20분</button>
-            <button class="opt-btn" onclick="setLimit(999, this)">무제한</button>
+        <h1 style="color:#00d2ff; font-size: 36px; margin-bottom: 5px;">GALAXY WAR</h1>
+        <div style="display:flex; justify-content:center; margin-bottom: 25px;">
+            <button class="opt-btn active" onclick="setLimit(5, this)">5 MIN</button>
+            <button class="opt-btn" onclick="setLimit(10, this)">10 MIN</button>
+            <button class="opt-btn" onclick="setLimit(999, this)">INFINITE</button>
         </div>
-        <p id="save-info" style="font-size: 11px; color: #666; margin-bottom: 15px;"></p>
-        <button class="btn" style="border-color:#00d2ff; color:#00d2ff;" onclick="initAndStart()">작전 개시</button>
+        <button class="btn" onclick="startGame()">MISSION START</button>
     </div>
 
-    <div id="pause-screen" class="screen-overlay" style="display:none;"><h1>PAUSED</h1><button class="btn" onclick="togglePause()">전투 복귀</button><button class="btn" onclick="location.reload()">시작화면</button></div>
-    <div id="over-screen" class="screen-overlay" style="display:none;"><h1 id="over-title">MISSION OVER</h1><p id="final-stats" style="margin-bottom: 20px;"></p><button class="btn" onclick="location.reload()">재정비 후 귀환</button></div>
+    <div id="unit-select-screen" class="screen-overlay" style="display:none;">
+        <h2 style="color:#f1c40f; margin-bottom:30px;">EVOLUTION SELECT</h2>
+        <button class="btn" onclick="applyUnit('laser')">LASER (PIERCE)</button>
+        <button class="btn" onclick="applyUnit('missile')">MISSILE (HOMING)</button>
+        <button class="btn" onclick="applyUnit('mine')">MINE (AREA)</button>
+    </div>
+
+    <div id="game-over-screen" class="screen-overlay" style="display:none;">
+        <h1 id="fail-title" style="color:#ff4757; font-size: 32px; margin-bottom: 10px;">MISSION OVER</h1>
+        <div id="record-board" style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; width: 100%; max-width: 300px; margin-bottom: 20px; border: 1px solid #444;">
+            <p id="res-mode" style="color:#f1c40f; font-weight:bold;"></p>
+            <p id="res-lv" style="font-size: 32px; font-weight:bold; margin: 10px 0;"></p>
+            <p id="res-stat" style="color:#aaa; font-size: 13px; line-height: 1.6;"></p>
+        </div>
+        <button class="btn btn-record" onclick="captureRecord()">📸 SAVE RECORD</button>
+        <button class="btn" onclick="goHome()">RESTART</button>
+    </div>
 </div>
 
 <script>
     const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
-    let state = 'STOP', score = 0, soldiers = 10, life = 5, level = 1, frame = 0;
-    let playerX = 200, objects = [], bullets = [], stars = [], shield = 0;
-    let isBossAppearing = false, isPaused = false, audioCtx = null, startTime = 0, limitMin = 5;
+    let state = 'STOP', isPaused = false, soldiers = 10, life = 5, level = 1, frame = 0;
+    const MAX_LIFE = 5;
+    let exp = 0, nextExp = 100, playerX = 200, objects = [], bullets = [], enemyBullets = [], texts = [], stars = [], limitMin = 5, startTime = 0;
+    let activeUnit = null, bossInField = false, warningTimer = 0, lastPauseTime = 0, playTimeStr = "";
+    let stage = 1;
+    let buffPierce = false, buffFireRate = 1.0, buffClone = false;
 
-    const bgm = new Audio('https://cdn.pixabay.com/audio/2022/10/14/audio_9939f770f7.mp3');
-    bgm.loop = true;
-    bgm.volume = 0.3;
-    const volSlider = document.getElementById('vol-slider');
-    volSlider.addEventListener('input', () => { bgm.volume = volSlider.value; });
+    const aCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playBeep(f, d) { try { let o=aCtx.createOscillator(), g=aCtx.createGain(); o.type='square'; o.frequency.value=f; g.gain.value=0.01; o.connect(g); g.connect(aCtx.destination); o.start(); o.stop(aCtx.currentTime+d); } catch(e){} }
+    for(let i=0; i<80; i++) stars.push({x: Math.random()*400, y: Math.random()*700, s: Math.random()*1.5});
 
-    for(let i=0; i<60; i++) stars.push({x: Math.random()*400, y: Math.random()*700, s: Math.random()*1.5});
-
-    // --- 레코드 및 시간 설정 시스템 ---
-    function setLimit(m, btn) { 
-        limitMin = m; 
-        document.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active')); 
-        btn.classList.add('active'); 
-        updateSaveInfo(); 
+    function addFloatingText(x, y, txt, col) { texts.push({x, y, txt, col, life: 60, fs: 12}); }
+    function setLimit(m, b) { limitMin = m; document.querySelectorAll('.opt-btn').forEach(btn=>btn.classList.remove('active')); b.classList.add('active'); }
+    function dropHeart(x, y) {
+        if (life >= MAX_LIFE) return;
+    
+        if (Math.random() < 0.08) {
+            objects.push({
+                x, y,
+                type: 'heart',
+                vy: 1.2,
+                size: 14,
+                heal: 0.5,
+                dead: false
+            });
+        }
     }
-    function saveRecord(data) { localStorage.setItem(`galaxy_rec_v14_${limitMin}`, JSON.stringify(data)); }
-    function loadRecord() { return JSON.parse(localStorage.getItem(`galaxy_rec_v14_${limitMin}`)); }
-    function updateSaveInfo() { 
-        const d = loadRecord(); 
-        const tLabel = limitMin === 999 ? "무제한" : limitMin+"분"; 
-        document.getElementById('save-info').innerHTML = d ? `${tLabel} 최고: Lv.${d.level} | ${d.highScore} Kills` : `${tLabel} 기록 없음`; 
-    }
-    updateSaveInfo();
-
-    function playBeep(freq, dur, vol = 0.005) { if (!audioCtx) return; const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.frequency.setValueAtTime(freq, audioCtx.currentTime); gain.gain.setValueAtTime(vol, audioCtx.currentTime); osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + dur); }
-
-    function initAndStart() {
-        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        bgm.play().catch(()=>{});
-        startTime = Date.now(); score = 0; life = 5; frame = 0; objects = []; bullets = []; shield = 0; level = 1; soldiers = 10;
-        state = 'PLAY'; isPaused = false;
-        document.querySelectorAll('.screen-overlay').forEach(el => el.style.display = 'none');
-        requestAnimationFrame(loop);
+    // 일시정지 기능 복구
+    function togglePause() { 
+        if(state!=='PLAY') return; 
+        isPaused = !isPaused; 
+        const btn = document.getElementById('pause-btn');
+        if(isPaused) {
+            btn.innerText = "RESUME";
+            btn.style.background = "#f1c40f";
+            btn.style.color = "#000";
+            lastPauseTime = Date.now();
+        } else {
+            btn.innerText = "PAUSE";
+            btn.style.background = "rgba(255,255,255,0.1)";
+            btn.style.color = "#fff";
+            startTime += (Date.now() - lastPauseTime);
+            requestAnimationFrame(loop);
+        }
     }
 
-    function togglePause() { if(state !== 'PLAY' && !isPaused) return; isPaused = !isPaused; if(isPaused) bgm.pause(); else bgm.play().catch(()=>{}); document.getElementById('pause-screen').style.display = isPaused ? 'flex' : 'none'; if(!isPaused) requestAnimationFrame(loop); }
+    function goHome() { location.reload(); }
+    function gameOver(msg) { 
+        state = 'STOP'; const elapsed = Math.floor((Date.now()-startTime)/1000);
+        const m = Math.floor(elapsed/60), s = elapsed%60; playTimeStr = `${m}m ${s}s`;
+        document.getElementById('game-over-screen').style.display = 'flex';
+        document.getElementById('fail-title').innerText = msg;
+        document.getElementById('res-mode').innerText = `MODE: ${limitMin===999?'INFINITE':limitMin+' MIN'}`;
+        document.getElementById('res-lv').innerText = `LV.${level}`;
+        document.getElementById('res-stat').innerText = `Exp: ${Math.floor(exp)} / Soldier: ${Math.floor(soldiers)}\nTime: ${playTimeStr}`;
+    }
 
-    function finalSave() { 
-        const d = loadRecord() || {level:1, highScore:0}; 
-        saveRecord({ level: Math.max(d.level, level), highScore: Math.max(d.highScore, score) }); 
+    function captureRecord() {
+        const tempCanvas = document.createElement('canvas'); tempCanvas.width = 400; tempCanvas.height = 700;
+        const tCtx = tempCanvas.getContext('2d');
+        tCtx.drawImage(canvas, 0, 0);
+        tCtx.fillStyle = "rgba(0,0,0,0.85)"; tCtx.fillRect(0, 200, 400, 300);
+        tCtx.fillStyle = "#ff4757"; tCtx.font = "bold 36px Arial"; tCtx.textAlign = "center";
+        tCtx.fillText("BATTLE RECORD", 200, 280);
+        tCtx.fillStyle = "#f1c40f"; tCtx.font = "bold 45px Arial";
+        tCtx.fillText(`LV.${level}`, 200, 350);
+        tCtx.fillStyle = "#fff"; tCtx.font = "16px Arial";
+        tCtx.fillText(`Soldiers: ${Math.floor(soldiers)} | Time: ${playTimeStr}`, 200, 400);
+        const dataUrl = tempCanvas.toDataURL("image/png");
+        const link = document.createElement('a'); link.href = dataUrl; link.download = `GalaxyWar_Record.png`; link.click();
+    }
+
+    function startGame() { 
+        state='PLAY'; soldiers=10; life=5; level=1; exp=0; nextExp=100; activeUnit=null; 
+        objects=[]; bullets=[]; enemyBullets=[]; texts=[]; buffPierce=false; buffFireRate=1.0; buffClone=false;
+        document.getElementById('start-screen').style.display='none'; startTime=Date.now(); requestAnimationFrame(loop); 
+    }
+    
+    function applyUnit(type) { activeUnit = type; document.getElementById('unit-select-screen').style.display='none'; isPaused = false; requestAnimationFrame(loop); }
+
+    function spawnEnemy() {
+        let sx = Math.random()*340+30; let r = Math.random();
+        if(r < 0.4) objects.push({x:sx, y:-50, type:'enemy', shape:'circle', hp:level*6, xp:10, vy:1.8, size:22, dead:false});
+        else if(r < 0.65) objects.push({x:sx, y:-50, type:'enemy', shape:'triangle', hp:level*8, xp:15, vy:2.0, size:22, hasUturned:false, dead:false});
+        else if(r < 0.85) objects.push({x:sx, y:-50, type:'enemy', shape:'square', hp:level*12, xp:20, vy:1.5, size:25, dead:false});
+        else objects.push({x:sx, y:-50, type:'enemy', shape:'star', hp:level*20, xp:45, vy:1.2, size:28, dead:false});
+    }
+
+    function spawnObject() {
+        let gateRate = Math.max(0.6 - stage * 0.08, 0.15);
+
+        if (Math.random() < gateRate) {
+            objects.push({
+                x: Math.random()*300+50,
+                y: -50,
+                type: 'gate',
+                size: 28,
+                val: Math.floor(Math.random()*20 + 10 + stage*2),
+                dead: false
+            });
+        } else {
+            spawnEnemy();
+        }
     }
 
     function loop() {
-        if(state !== 'PLAY' || isPaused) return;
+        if(state!=='PLAY' || isPaused) return;
         frame++;
-        const elapsedSec = Math.floor((Date.now() - startTime) / 1000);
+        if(!bossInField) {
+            const elapsed = Math.floor((Date.now()-startTime)/1000);
+            const rem = limitMin * 60 - elapsed;
+            document.getElementById('top-center').innerText = limitMin === 999 ? "∞" : `${Math.floor(rem/60).toString().padStart(2,'0')}:${(rem%60).toString().padStart(2,'0')}`;
+            if(limitMin !== 999 && rem <= 0) gameOver("TIME OVER");
+        } else startTime += 16.6;
+
+        let bCount = Math.min(12, Math.floor(soldiers/100)+1);
+        let fireRate = Math.max(4, Math.floor(((activeUnit === 'laser') ? 20 : (activeUnit === 'mine' ? 45 : 8)) / buffFireRate));
+        let baseDmg = (activeUnit === 'laser') ? (level * 0.4 + soldiers * 0.02) : (activeUnit === 'mine' ? (level * 35) : level);
         
-        // 시간 UI 처리
-        if(limitMin !== 999) {
-            const remainSec = Math.max(0, (limitMin * 60) - elapsedSec);
-            document.getElementById('time-display').innerText = `${Math.floor(remainSec/60).toString().padStart(2,'0')}:${(remainSec%60).toString().padStart(2,'0')}`;
-            if(remainSec <= 0) { endGame("MISSION CLEAR"); return; }
-        } else {
-            document.getElementById('time-display').innerText = `${Math.floor(elapsedSec/60).toString().padStart(2,'0')}:${(elapsedSec%60).toString().padStart(2,'0')}`;
-        }
+        document.getElementById('dps-ui').innerText = "D: " + Math.floor((60/fireRate) * bCount * baseDmg * (buffClone?1.5:1));
+        document.getElementById('soldier-ui').innerText = "S: " + Math.floor(soldiers);
+        document.getElementById('lv-ui').innerText = "LV: " + level;
+        document.getElementById('score-ui').innerText = `EXP: ${Math.floor(exp)} / ${nextExp}`;
+        document.getElementById('exp-bar').style.width = (exp/nextExp*100) + "%";
 
-        ctx.fillStyle = '#050508'; ctx.fillRect(0,0,400,700);
-        ctx.fillStyle = '#fff'; stars.forEach(st => { st.y += st.s; if(st.y > 700) st.y = 0; ctx.fillRect(st.x, st.y, st.s, st.s); });
+        ctx.fillStyle = '#010103'; ctx.fillRect(0,0,400,700);
+        ctx.fillStyle = '#fff'; stars.forEach(s => { s.y+=s.s; if(s.y>700) s.y=0; ctx.fillRect(s.x, s.y, s.s, s.s); });
 
-        // --- 밸런스: v13의 이지 밸런스 유지 ---
-        const spawnInterval = Math.max(25, 160 - (level * 8) - Math.floor(elapsedSec / 8)); 
-        if(!isBossAppearing && frame % spawnInterval === 0) {
-            let t = 'enemy';
-            const rand = Math.random();
-            let gateProb = (elapsedSec < 30) ? 0.75 : (soldiers < 100 ? 0.55 : 0.35);
-            
-            if(rand < gateProb) t = 'gate';
-            else if(rand < gateProb + 0.05) t = 'heart';
-            else if(rand < gateProb + 0.1) t = 'shield';
-            else t = 'enemy';
-
-            let baseHp = (soldiers * 0.3) + (level * 10) + (elapsedSec * 0.2);
-            if(elapsedSec < 40) baseHp *= 0.4;
-
-            const finalHp = Math.max(1, Math.floor(baseHp * (1 + (Math.random()*0.16 - 0.08))));
-            objects.push({ x: Math.random()*340+30, y: -40, type: t, val: t === 'gate' ? Math.floor(Math.random()*20 + 10 + level) : 5, hp: t === 'enemy' ? finalHp : 0, size: 22 });
-        }
-
-        // 보스 출현 로직
-        if(elapsedSec > 0 && elapsedSec % 60 === 0 && !isBossAppearing) {
-            isBossAppearing = true;
-            document.getElementById('msg-layer').style.display = 'block';
-            setTimeout(() => {
-                document.getElementById('msg-layer').style.display = 'none';
-                objects.push({ x: 200, y: -100, type: 'boss', hp: Math.floor((soldiers + level * 80 + elapsedSec * 2) * 2.2), size: 65 });
-            }, 2000);
-        }
-
-        // --- 화력 집중 시스템 (각도 좁게 유지) ---
-        const fireRate = Math.max(2, 11 - Math.floor(soldiers/350));
-        if(frame % fireRate === 0) {
-            const bX = playerX, bY = 610;
-            if(soldiers < 30) { bullets.push({x: bX, y: bY, vx: 0}); }
-            else { 
-                let count = Math.min(18, Math.floor(soldiers / 70) + 2);
-                for(let i=0; i<count; i++) {
-                    let offset = (i - (count-1)/2) * 8;
-                    let angleX = (i - (count-1)/2) * 0.35; // 좁은 각도
-                    bullets.push({x: bX + offset, y: bY, vx: angleX});
-                }
+        if(!bossInField && frame % 3000 === 0 && frame > 0) { warningTimer = 180; playBeep(200, 0.5); }
+        if(warningTimer > 0) {
+            warningTimer--; document.getElementById('warning-overlay').style.display = 'block';
+            if(warningTimer === 0) {
+                document.getElementById('warning-overlay').style.display = 'none'; bossInField = true;
+                objects.push({x:200, y:-80, type:'boss', isWhite:stage%5===0, hp:stage*500+level*200, size:55, dead:false});
             }
-            playBeep(1100, 0.01);
         }
 
-        let theme = soldiers <= 100 ? '#00d2ff' : (soldiers <= 400 ? '#2ecc71' : '#f1c40f');
+            let spawnInterval = Math.max(30 - stage * 2, 12);
+            
+            if (!bossInField && warningTimer === 0 && frame % spawnInterval === 0) {
+                spawnObject();
+            }
+
 
         for(let i=objects.length-1; i>=0; i--) {
-            let o = objects[i];
-            const fallSpeed = (o.type === 'boss') ? 0.3 : (1.1 + (level * 0.2) + (elapsedSec / 600));
-            o.y += fallSpeed;
+            let o = objects[i]; 
+            if(o.shape === 'triangle' && o.y > 420 && !o.hasUturned) { o.vy = -o.vy; o.hasUturned = true; }
+            o.y += (o.type==='boss'?0.5:(o.vy||1.8));
 
-            ctx.lineWidth = 2; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.strokeStyle = (['gate','heart','shield'].includes(o.type)) ? '#2ecc71' : '#ff4757';
-            if(o.type === 'boss') ctx.strokeStyle = '#f1c40f';
-            
-            ctx.beginPath();
-            if(o.type === 'gate') ctx.strokeRect(o.x-40, o.y, 80, 35);
-            else { ctx.arc(o.x, o.y, o.size, 0, 6.28); ctx.stroke(); }
-            
-            if(['enemy','boss'].includes(o.type)) { ctx.fillStyle = '#fff'; ctx.font = '11px arial'; ctx.fillText(o.hp, o.x, o.y); }
-            if(o.type === 'gate') { ctx.fillStyle='#fff'; ctx.font='bold 15px arial'; ctx.fillText('+'+o.val, o.x, o.y+17.5); }
-            
-            bullets.forEach((b, bi) => {
-                if(['enemy','boss'].includes(o.type) && Math.hypot(b.x-o.x, b.y-o.y) < o.size+10) {
-                    o.hp--; bullets.splice(bi, 1);
-                    if(o.hp <= 0) { 
-                        o.dead = true; score += (o.type === 'boss' ? 100 : 1); 
-                        if(o.type === 'boss') { isBossAppearing = false; level++; soldiers += 50; }
+            if(o.shape === 'star' && frame % 120 === 0) {
+                let a = Math.atan2(630-o.y, playerX-o.x); enemyBullets.push({x:o.x, y:o.y, vx:Math.cos(a)*3, vy:Math.sin(a)*3});
+            }
+
+            if(o.type === 'mine') {
+                o.y += o.vy; 
+                o.vy *= 0.95; 
+                o.timer--; 
+
+               objects.forEach(t => {
+                    if (!t.dead && Math.hypot(o.x - t.x, o.y - t.y) < o.radius) {
+                
+                        if (t.type === 'enemy' || t.type === 'boss') {
+                            t.hp -= baseDmg * 3;
+                            if (t.hp <= 0) {
+                                t.dead = true;
+                                let xpGain = t.xp || (t.isWhite ? 150 : 100);
+                                exp += xpGain;
+                                addFloatingText(t.x, t.y, `EXP +${xpGain}`, "#2ecc71");
+                            }
+                            dropHeart(o.x, o.y);
+                        }
+                
+                        if (t.type === 'gate') {
+                            let gateDmg = Math.floor(baseDmg * 1.5); // 🔧 밸런스 포인트
+                            t.val -= gateDmg;
+                
+                            addFloatingText(t.x, t.y, `-${gateDmg}`, "#ff9f43");
+                
+                            if (t.val <= 0) {
+                                t.dead = true;
+                            }
+                        }
                     }
+                });
+
+                ctx.fillStyle = o.timer%10 < 5 ? '#f00' : '#fff'; ctx.beginPath(); ctx.arc(o.x, o.y, 8, 0, 7); ctx.fill();
+                if(o.timer <= 0) {
+                    o.dead = true; ctx.fillStyle = 'rgba(255,100,0,0.5)'; ctx.beginPath(); ctx.arc(o.x, o.y, o.radius, 0, Math.PI * 2); ctx.fill();
+                    objects.forEach(t => { if(!t.dead && (t.type==='enemy'||t.type==='boss'||t.type==='gate') && Math.hypot(o.x-t.x, o.y-t.y) < o.radius) { t.hp -= baseDmg * 3; if(t.hp <= 0) { t.dead = true; exp+=t.xp||100; addFloatingText(t.x, t.y, `EXP +${t.xp||100}`, "#2ecc71"); } }});
                 }
-            });
-            if(!o.dead && Math.hypot(o.x-playerX, o.y-620) < 30) {
-                if(o.type === 'gate') soldiers += o.val; else if(o.type === 'heart') life = Math.min(5, life+1); else if(o.type === 'shield') shield = Math.min(30, shield + 10);
-                else { if(shield > 0) shield--; else life -= 1; }
+            }
+            if (o.type === 'heart' && Math.hypot(o.x-playerX, o.y-630) < 25) {
+                life = Math.min(MAX_LIFE, life + o.heal);
+                addFloatingText(playerX, 600, `HP +${o.heal}`, "#ff6b81");
                 o.dead = true;
             }
-            if(o.y > 750 || o.dead) objects.splice(i, 1);
+
+            if(!o.dead && Math.hypot(o.x-playerX, o.y-630) < o.size+15) {
+                if(o.type==='gate') { soldiers += o.val; addFloatingText(playerX, 600, (o.val>=0?"+":"")+Math.floor(o.val), o.val>=0?"#2ecc71":"#ff4757"); if(o.val < 0) life -= 0.5; o.dead = true; }
+                else if(o.type==='boss') { gameOver("BOSS COLLISION!"); return; }
+                else { life -= 0.5; o.dead=true; addFloatingText(playerX, 630, "HP -0.5", "#ff4757"); }
+            }
+
+            if(o.y > 720 || (o.shape==='triangle' && o.y < -60 && o.hasUturned)) {
+                if(o.type==='boss') { gameOver("BOSS ESCAPED!"); return; }
+                if(o.type==='enemy') life -= 0.5; objects.splice(i,1); continue;
+            }
+
+            if(o.dead) { 
+                if(o.type==='boss') {
+                    bossInField = false; stage++; if(o.isWhite) { let r = Math.random(); if(r < 0.33) buffPierce = true; else if(r < 0.66) buffFireRate = 1.5; else buffClone = true; }
+                    isPaused=true; document.getElementById('unit-select-screen').style.display='flex'; 
+                }
+                objects.splice(i,1); continue; 
+            }
+
+            ctx.lineWidth=2; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font='bold 17px Arial';
+            if(o.type==='gate') {
+                ctx.strokeStyle=o.val>=0?'#2ecc71':'#ff4757'; ctx.strokeRect(o.x-30, o.y-15, 60, 30);
+                ctx.fillStyle=o.val>=0?'#2ecc71':'#ff4757'; ctx.fillText((o.val>=0?"+":"")+Math.floor(o.val), o.x, o.y);
+            } else {
+                ctx.strokeStyle = o.type==='boss'?(o.isWhite?'#fff':'#f1c40f'):(o.shape==='star'?'#f1c40f':(o.shape==='square'?'#3498db':(o.shape==='triangle'?'#00ff00':'#ff79c6')));
+                ctx.beginPath();
+                if(o.shape==='triangle'){ctx.moveTo(o.x,o.y-20); ctx.lineTo(o.x-20,o.y+20); ctx.lineTo(o.x+20,o.y+20); ctx.closePath();}
+                else if(o.shape==='square'){ctx.rect(o.x-20,o.y-20,40,40);}
+                else if(o.shape==='star'){for(let j=0;j<5;j++){ctx.lineTo(o.x+Math.cos((18+j*72)*Math.PI/180)*28, o.y-Math.sin((18+j*72)*Math.PI/180)*28); ctx.lineTo(o.x+Math.cos((54+j*72)*Math.PI/180)*12, o.y-Math.sin((54+j*72)*Math.PI/180)*12);} ctx.closePath();}
+                else ctx.arc(o.x,o.y,o.size,0,7);
+                ctx.stroke(); ctx.fillStyle='#fff'; 
+                // 적군 체력 숫자 정중앙 위치 수정
+                ctx.fillText(Math.floor(o.hp), o.x, o.y);
+            }
         }
 
-        bullets.forEach((b, i) => { b.y -= 15; b.x += b.vx; ctx.fillStyle = theme; ctx.fillRect(b.x-1.5, b.y, 3, 12); if(b.y < -20 || b.x < -20 || b.x > 420) bullets.splice(i, 1); });
+        if(frame % fireRate === 0) {
+            if(activeUnit === 'mine') objects.push({x:playerX, y:600, type:'mine', timer:40, size:10, vy:-10, radius: 120, dead:false});
+            else {
+                for(let i=0; i<bCount; i++) {
+                    let bx = playerX+(i-(bCount-1)/2)*10;
+                    bullets.push({x:bx, y:615, type:activeUnit||'normal', pierce:buffPierce, target:activeUnit==='missile'?objects.find(obj=>!obj.dead&&(obj.type==='enemy'||obj.type==='boss')):null});
+                    if(buffClone) bullets.push({x:bx-40, y:630, type:activeUnit||'normal', dmgMult:0.5});
+                }
+            }
+        }
 
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#000'; ctx.strokeStyle = theme; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(playerX, 620, 20, 0, 6.28); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 13px arial'; ctx.fillText(Math.floor(soldiers), playerX, 620);
+             for (let i = bullets.length - 1; i >= 0; i--) {
+                let b = bullets[i];
+            
+                // 🔥 MISSILE 유도 이동
+                if (b.type === 'missile' && b.target && !b.target.dead) {
+                    const a = Math.atan2(b.target.y - b.y, b.target.x - b.x);
+                    b.x += Math.cos(a) * 6;
+                    b.y += Math.sin(a) * 6;
+                } else {
+                    b.y -= 15;
+                }
+            
+                // 🎨 탄환 색상 (laser / missile / normal)
+                if (b.type === 'laser') {
+                    ctx.fillStyle = '#ff00ff';
+                } else if (b.type === 'missile') {
+                    ctx.fillStyle = '#ff9f43';
+                } else {
+                    ctx.fillStyle = '#00d2ff';
+                }
+            
+                ctx.fillRect(b.x - 1.5, b.y, 3, 12);
+            
+                // 💥 충돌 판정
+                for (let o of objects) {
+                    if (!o.dead && Math.hypot(b.x - o.x, b.y - o.y) < o.size + 15) {
+                        if (o.type === 'heart') {
+                            o.y += o.vy;
+                        
+                            ctx.fillStyle = '#ff2d95';
+                            ctx.beginPath();
+                            ctx.arc(o.x, o.y, 10, 0, Math.PI * 2);
+                            ctx.fill();
+                        
+                            ctx.fillStyle = '#fff';
+                            ctx.font = 'bold 10px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.fillText('+HP', o.x, o.y + 3);
+                        }
+            
+                        if (o.type === 'gate') {
+                            o.val++;
+                            if (!b.pierce && b.type !== 'laser') {
+                                bullets.splice(i, 1);
+                            }
+                            break;
+                        }
+            
+                     if (o.type === 'enemy' || o.type === 'boss') {
+                    
+                        if (o.isWhite) {
+                            ctx.strokeStyle = '#fff';
+                            ctx.shadowBlur = 15;
+                            ctx.shadowColor = '#fff';
+                        }
+                    
+                        o.hp -= baseDmg * (b.dmgMult || 1);
+                    
+                        if (!b.pierce && b.type !== 'laser') {
+                            bullets.splice(i, 1);
+                        }
+                    
+                        if (o.hp <= 0) {
+                            o.dead = true;
+                    
+                            let xpGain = o.xp ?? (o.isWhite ? 150 : 100);
+                            exp += xpGain;
+                    
+                            addFloatingText(
+                                o.x,
+                                o.y,
+                                `EXP +${xpGain}`,
+                                "#2ecc71"
+                            );
+                        }
+                    
+                        break;
+                    }
 
-        document.getElementById('score-text').innerText = "Kills: " + score;
-        document.getElementById('life-ui').innerText = "❤️".repeat(life);
-        document.getElementById('soldier-ui').innerText = "S: " + Math.floor(soldiers);
-        document.getElementById('lv-ui').innerText = "Lv." + level;
+            
+                // 🧹 화면 밖 제거
+                if (bullets[i] && (b.y < -20 || b.y > 720)) {
+                    bullets.splice(i, 1);
+                }
+            }
+
+        enemyBullets.forEach((eb,ei)=>{ eb.x+=eb.vx; eb.y+=eb.vy; ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(eb.x,eb.y,5,0,7); ctx.fill(); if(Math.hypot(eb.x-playerX,eb.y-630)<20){life-=0.5; enemyBullets.splice(ei,1);}});
         
-        if(life <= 0) endGame("MISSION FAILED"); else requestAnimationFrame(loop);
+        if(exp >= nextExp) { level++; exp=0; nextExp=Math.floor(nextExp*1.4); addFloatingText(playerX, 580, "LEVEL UP!", "#f1c40f"); playBeep(600, 0.1); }
+        for(let i=texts.length-1; i>=0; i--) { let t = texts[i]; t.y -= 1; t.life--; ctx.globalAlpha = t.life / 60; ctx.fillStyle = t.col; ctx.font = `bold ${t.fs}px Arial`; ctx.fillText(t.txt, t.x, t.y); ctx.globalAlpha = 1.0; if(t.life <= 0) texts.splice(i,1); }
+
+        ctx.strokeStyle='#00d2ff'; ctx.lineWidth=2.5; ctx.beginPath();
+        ctx.moveTo(playerX, 615); ctx.lineTo(playerX-15, 640); ctx.lineTo(playerX, 633); ctx.lineTo(playerX+15, 640); ctx.closePath(); ctx.stroke();
+        if(buffClone) { ctx.globalAlpha=0.4; ctx.strokeRect(playerX-55, 620, 30, 20); ctx.globalAlpha=1; }
+        document.getElementById('life-ui').innerText = '❤️'.repeat(Math.floor(life)) + (life%1>=0.5?'💔':'');
+        if(life<=0) gameOver("HP EXHAUSTED"); else requestAnimationFrame(loop);
     }
 
-    function endGame(title) { 
-        state = 'STOP'; bgm.pause(); 
-        finalSave(); 
-        document.getElementById('over-screen').style.display = 'flex'; 
-        document.getElementById('over-title').innerText = title; 
-        document.getElementById('final-stats').innerText = `Lv.${level} | ${score} Kills`; 
-    }
-    
-    function handleMove(e) { 
-        if(state !== 'PLAY' || isPaused) return; 
-        let rect = canvas.getBoundingClientRect(); 
-        let clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        let x = clientX - rect.left; 
-        playerX = Math.max(25, Math.min(375, x * (400 / rect.width))); 
-    }
-    canvas.addEventListener('mousemove', handleMove);
-    canvas.addEventListener('touchmove', (e) => { handleMove(e); e.preventDefault(); }, {passive:false});
+    const mv = (e) => { if(state==='PLAY'&&!isPaused) { let r=canvas.getBoundingClientRect(); let touchX = e.touches ? e.touches[0].clientX : e.clientX; playerX = Math.max(20, Math.min(380, (touchX - r.left) * (400 / r.width))); } };
+    canvas.addEventListener('mousemove', mv);
+    canvas.addEventListener('touchstart', (e) => { if(state==='PLAY') mv(e); });
+    canvas.addEventListener('touchmove', (e) => { mv(e); e.preventDefault(); }, {passive:false});
 </script>
 </body>
 </html>
